@@ -1,0 +1,8 @@
+openai
+python-dotenv
+qdrant-client
+streamlit
+streamlit-audiorecorder
+pydub
+yt-dlp>=2023.12.1
+werkzeug>=2.2.0
