@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 import streamlit as st
-from openai import OpenAI
+import openai
 from werkzeug.utils import secure_filename
 import yt_dlp
 
@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 st.set_page_config(page_title="Transkrypcja i Podsumowanie", layout="wide")
 st.title("Transkrypcja i Podsumowanie Audio/Video")
 
-# API Client
-client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+# API Key
+openai.api_key = st.sidebar.text_input("OpenAI API Key", type="password") or st.stop()
 
 # Settings
 BASE_DIR = Path("uploads")
@@ -105,26 +105,26 @@ def transcribe_chunks(chunks):
     for c in chunks:
         if c.stat().st_size <= MAX_SIZE:
             with open(c, 'rb') as f:
-                res = client.audio.transcriptions.create(
+                # jawne ustawienie języka polskiego i formatu tekstowego
+                res = openai.Audio.transcribe(
                     model='whisper-1',
                     file=f,
                     language='pl',
                     response_format='text'
                 )
-            texts.append(clean_transcript(res.text))
+            texts.append(clean_transcript(res))
         c.unlink()
     return "\n".join(texts)
 
 @st.cache_data
 def summarize(text: str):
     prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + text
-    res = client.chat.completions.create(
+    res = openai.ChatCompletion.create(
         model='gpt-3.5-turbo',
         messages=[{'role': 'user', 'content': prompt}],
         max_tokens=300
     )
-    content = res.choices[0].message.content
-    lines = content.splitlines()
+    lines = res.choices[0].message.content.splitlines()
     topic = lines[0] if lines else ''
     summary = ' '.join(lines[1:])
     return topic, summary
@@ -152,6 +152,7 @@ for key, default in [(done_key, False), (topic_key, ''), (sum_key, '')]:
 
 # Transcription block
 if st.button('Transkrybuj') and not st.session_state[done_key]:
+    # dzielenie i transkrypcja
     chunks = split_audio(orig)
     text = transcribe_chunks(chunks)
     tr.write_text(text, encoding='utf-8')
