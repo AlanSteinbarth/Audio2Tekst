@@ -1,6 +1,6 @@
 streamlit
-openai
 werkzeug
 yt-dlp
 ffmpeg-python
 pydub
+openai==0.28.0
