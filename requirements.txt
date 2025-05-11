@@ -3,3 +3,4 @@ openai
 werkzeug
 yt-dlp
 ffmpeg-python
+pydub
