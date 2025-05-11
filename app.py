@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Streamlit setup
 st.set_page_config(page_title="Transkrypcja i Podsumowanie", layout="wide")
-st.title('"Z chaosu w konkret"')
-st.subheader("Przekształć swoje pliki audio i video oraz z YouTube w tekst, a następnie zrób z nich zwięzłe podsumowanie" )
+st.title('📼"Audio2Tekst"📝')
+st.subheader("Przekształć swoje pliki audio i video (oraz z YouTube) w tekst, a następnie zrób z nich zwięzłe podsumowanie" )
 
 # API Key
 openai.api_key = st.sidebar.text_input("Podaj swój OpenAI API Key", type="password") or st.stop()
