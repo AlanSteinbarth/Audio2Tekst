@@ -19,10 +19,11 @@ logger = logging.getLogger(__name__)
 
 # Streamlit setup
 st.set_page_config(page_title="Transkrypcja i Podsumowanie", layout="wide")
-st.title("Transkrypcja i Podsumowanie Audio/Video")
+st.title('"Z chaosu w konkret"')
+st.subheader("Przekształć swoje pliki audio i video oraz z YouTube w tekst, a następnie zrób z nich zwięzłe podsumowanie" )
 
 # API Key
-openai.api_key = st.sidebar.text_input("OpenAI API Key", type="password") or st.stop()
+openai.api_key = st.sidebar.text_input("Podaj swój OpenAI API Key", type="password") or st.stop()
 
 # Settings
 BASE_DIR = Path("uploads")
@@ -130,9 +131,9 @@ def summarize(text: str):
     return topic, summary
 
 # UI Selection
-src = st.sidebar.radio('Źródło', ['Plik lokalny', 'YouTube'])
+src = st.sidebar.radio('Wybierz źródło audio:', ['Plik lokalny', 'YouTube'])
 if src == 'YouTube':
-    url = st.sidebar.text_input('URL YouTube') or st.stop()
+    url = st.sidebar.text_input('Wklej adres www z YouTube:') or st.stop()
     data, ext = download_youtube_audio(url)
 else:
     up = st.sidebar.file_uploader('Wybierz plik', type=[e.strip('.') for e in ALLOWED_EXT]) or st.stop()
@@ -161,7 +162,7 @@ if st.button('Transkrybuj') and not st.session_state[done_key]:
 # Display transcript and download
 if st.session_state[done_key]:
     transcript = tr.read_text(encoding='utf-8')
-    st.text_area('Transkrypt', transcript, height=300)
+    st.text_area('Transkrypt (możesz edytować tekst i później go zapisać)', transcript, height=300)
     st.download_button('Pobierz transkrypt', transcript, file_name=tr.name)
 
     # Summary generation
