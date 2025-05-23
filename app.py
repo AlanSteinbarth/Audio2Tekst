@@ -1,3 +1,17 @@
+"""
+Audio2Tekst
+=======================================
+
+Ten moduł zawiera implementację aplikacji Streamlit do transkrypcji
+plików audio i video na tekst oraz generowania ich podsumowań.
+
+Autor: Alan Steinbarth (alan.steinbarth@gmail.com)
+GitHub: https://github.com/AlanSteinbarth
+Data: 23 maja 2025
+Wersja: 1.0.0
+"""
+
+# --- Importy systemowe ---
 import hashlib
 import logging
 import re
@@ -8,24 +22,28 @@ import shutil
 import subprocess
 from pathlib import Path
 
+# --- Importy zewnętrzne ---
 import streamlit as st
 import openai
 from werkzeug.utils import secure_filename
 import yt_dlp
 
-# Logger
+# --- Konfiguracja logowania ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Streamlit setup
-st.set_page_config(page_title="Transkrypcja i Podsumowanie", layout="wide")
-st.title('📼"Audio2Tekst"📝')
-st.subheader("Przekształć swoje pliki audio i video (oraz z YouTube) w tekst, a następnie zrób z nich zwięzłe podsumowanie" )
+# --- Konfiguracja Streamlit ---
+st.set_page_config(page_title="Audio2Tekst", layout="wide")
+st.title('📼Audio2Tekst📝')
+st.subheader("Przekształć swoje pliki audio i video (oraz z YouTube) na tekst, a następnie zrób z nich zwięzłe podsumowanie" )
 
-# API Key
-openai.api_key = st.sidebar.text_input("Podaj swój OpenAI API Key", type="password") or st.stop()
+# --- Konfiguracja OpenAI ---
+api_key = st.sidebar.text_input("Podaj swój OpenAI API Key", type="password")
+if not api_key:
+    st.stop()
+client = openai.OpenAI(api_key=api_key)
 
-# Settings
+# --- Stałe i konfiguracja ścieżek ---
 BASE_DIR = Path("uploads")
 for folder in ("originals", "transcripts", "summaries"):
     (BASE_DIR / folder).mkdir(parents=True, exist_ok=True)
@@ -33,9 +51,10 @@ ALLOWED_EXT = {".mp3", ".wav", ".m4a", ".mp4", ".mov", ".avi", ".webm"}
 MAX_SIZE = 25 * 1024 * 1024  # 25MB
 CHUNK_MS = 5 * 60 * 1000     # 5 minutes in ms
 
-# Helpers
+# --- Funkcje pomocnicze ---
 @st.cache_data
 def init_paths(data: bytes, ext: str):
+    """Inicjalizuje ścieżki dla plików na podstawie zawartości."""
     uid = hashlib.md5(data).hexdigest()
     orig = BASE_DIR / "originals" / f"{uid}{ext}"
     tr = BASE_DIR / "transcripts" / f"{uid}.txt"
@@ -46,6 +65,7 @@ def init_paths(data: bytes, ext: str):
 
 @st.cache_data
 def download_youtube_audio(url: str):
+    """Pobiera audio z filmu YouTube i konwertuje do odpowiedniego formatu."""
     tmpdir = tempfile.mkdtemp()
     opts = {
         'format': 'bestaudio[ext=webm]/bestaudio',
@@ -65,6 +85,7 @@ def download_youtube_audio(url: str):
 
 @st.cache_data
 def get_duration(path: Path) -> float:
+    """Zwraca długość pliku audio/video w sekundach."""
     cmd = [
         'ffprobe', '-v', 'error',
         '-show_entries', 'format=duration',
@@ -76,6 +97,7 @@ def get_duration(path: Path) -> float:
 
 @st.cache_data
 def split_audio(path: Path):
+    """Dzieli długie pliki audio na mniejsze części do przetworzenia."""
     duration = get_duration(path)
     seg_sec = CHUNK_MS / 1000
     parts = []
@@ -96,41 +118,43 @@ def split_audio(path: Path):
 
 @st.cache_data
 def clean_transcript(text: str) -> str:
+    """Czyści transkrypcję z typowych artefaktów mowy."""
     text = re.sub(r"\b(?:em|yhm|um|uh|a{2,}|y{2,})\b", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 @st.cache_data
 def transcribe_chunks(chunks):
+    """Transkrybuje podzielone fragmenty audio na tekst używając OpenAI API."""
     texts = []
     for c in chunks:
         if c.stat().st_size <= MAX_SIZE:
             with open(c, 'rb') as f:
-                # jawne ustawienie języka polskiego i formatu tekstowego
-                res = openai.Audio.transcribe(
+                res = client.audio.transcriptions.create(
                     model='whisper-1',
                     file=f,
                     language='pl',
                     response_format='text'
                 )
-            texts.append(clean_transcript(res))
+                texts.append(clean_transcript(str(res)))
         c.unlink()
     return "\n".join(texts)
 
 @st.cache_data
 def summarize(text: str):
+    """Generuje temat i podsumowanie z transkrypcji."""
     prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + text
-    res = openai.ChatCompletion.create(
+    completion = client.chat.completions.create(
         model='gpt-3.5-turbo',
         messages=[{'role': 'user', 'content': prompt}],
         max_tokens=300
     )
-    lines = res.choices[0].message.content.splitlines()
+    lines = completion.choices[0].message.content.splitlines()
     topic = lines[0] if lines else ''
     summary = ' '.join(lines[1:])
     return topic, summary
 
-# UI Selection
+# --- Interfejs użytkownika ---
 src = st.sidebar.radio('Wybierz źródło audio:', ['Plik lokalny', 'YouTube'])
 if src == 'YouTube':
     url = st.sidebar.text_input('Wklej adres www z YouTube:') or st.stop()
@@ -139,11 +163,11 @@ else:
     up = st.sidebar.file_uploader('Wybierz plik', type=[e.strip('.') for e in ALLOWED_EXT]) or st.stop()
     data, ext = up.read(), Path(secure_filename(up.name)).suffix.lower()
 
-# Initialize and playback
+# --- Przetwarzanie pliku ---
 uid, orig, tr, sm = init_paths(data, ext)
 st.audio(orig.read_bytes(), format=ext.lstrip('.'))
 
-# Session state keys
+# --- Stan sesji ---
 done_key = f"done_{uid}"
 topic_key = f"topic_{uid}"
 sum_key = f"summary_{uid}"
@@ -151,7 +175,7 @@ for key, default in [(done_key, False), (topic_key, ''), (sum_key, '')]:
     if key not in st.session_state:
         st.session_state[key] = default
 
-# Transcription block
+# --- Transkrypcja ---
 if st.button('Transkrybuj') and not st.session_state[done_key]:
     # dzielenie i transkrypcja
     chunks = split_audio(orig)
@@ -159,20 +183,20 @@ if st.button('Transkrybuj') and not st.session_state[done_key]:
     tr.write_text(text, encoding='utf-8')
     st.session_state[done_key] = True
 
-# Display transcript and download
+# --- Wyświetlanie wyników ---
 if st.session_state[done_key]:
     transcript = tr.read_text(encoding='utf-8')
     st.text_area('Transkrypt (możesz edytować tekst i później go zapisać)', transcript, height=300)
     st.download_button('Pobierz transkrypt', transcript, file_name=tr.name)
 
-    # Summary generation
+    # Generowanie podsumowania
     if st.button('Podsumuj') and not st.session_state[topic_key]:
         t, s = summarize(transcript)
         sm.write_text(f"{t}\n\n{s}", encoding='utf-8')
         st.session_state[topic_key] = t
         st.session_state[sum_key] = s
 
-# Display summary and download
+# --- Wyświetlanie podsumowania ---
 if st.session_state[topic_key]:
     st.subheader('Temat')
     st.write(st.session_state[topic_key])

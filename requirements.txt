@@ -3,4 +3,4 @@ werkzeug
 yt-dlp
 ffmpeg-python
 pydub
-openai==0.28.0
+openai>=1.0.0
