@@ -143,16 +143,23 @@ def transcribe_chunks(chunks):
 @st.cache_data
 def summarize(text: str):
     """Generuje temat i podsumowanie z transkrypcji."""
-    prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + text
-    completion = client.chat.completions.create(
-        model='gpt-3.5-turbo',
-        messages=[{'role': 'user', 'content': prompt}],
-        max_tokens=300
-    )
-    lines = completion.choices[0].message.content.splitlines()
-    topic = lines[0] if lines else ''
-    summary = ' '.join(lines[1:])
-    return topic, summary
+    try:
+        prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + text
+        completion = client.chat.completions.create(
+            model='gpt-3.5-turbo',
+            messages=[{'role': 'user', 'content': prompt}],
+            max_tokens=300
+        )
+        if completion and completion.choices and completion.choices[0].message:
+            content = completion.choices[0].message.content
+            lines = content.splitlines() if content else []
+            topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
+            summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
+            return topic, summary
+    except Exception as e:
+        logger.error(f"Błąd podczas generowania podsumowania: {str(e)}")
+        return "Błąd podczas generowania podsumowania", str(e)
+    return "Nie udało się wygenerować podsumowania", "Spróbuj ponownie lub skontaktuj się z administratorem"
 
 # --- Interfejs użytkownika ---
 src = st.sidebar.radio('Wybierz źródło audio:', ['Plik lokalny', 'YouTube'])
