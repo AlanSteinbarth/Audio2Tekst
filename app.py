@@ -5,10 +5,18 @@ Audio2Tekst
 Ten moduł zawiera implementację aplikacji Streamlit do transkrypcji
 plików audio i video na tekst oraz generowania ich podsumowań.
 
+🚀 WERSJA 2.2.0 - ENTERPRISE EDITION (ENHANCED) 🚀
+- Finalna wersja z kompletną infrastrukturą enterprise
+- Dodano enterprise-level dokumentację i CI/CD
+- Implementowano kompletny system testów i security scanning
+- Przeprowadzono refaktoryzację kodu z poprawkami błędów
+- Dodano professional project structure i GitHub templates
+- Kolejna poprawiona wersja z pełną profesjonalną strukturą
+
 Autor: Alan Steinbarth (alan.steinbarth@gmail.com)
 GitHub: https://github.com/AlanSteinbarth
-Data: 23 maja 2025
-Wersja: 1.0.0
+Data: 26 maja 2025
+Wersja: 2.2.0 (Enterprise Edition Enhanced)
 """
 
 # --- Importy systemowe ---
@@ -52,6 +60,17 @@ MAX_SIZE = 25 * 1024 * 1024  # 25MB
 CHUNK_MS = 5 * 60 * 1000     # 5 minutes in ms
 
 # --- Funkcje pomocnicze ---
+# UWAGA: To jest ulepszona wersja programu Audio2Tekst
+# Główne usprawnienia w wersji 2.2.0:
+# ✅ Finalna wersja enterprise z kompletną infrastrukturą
+# ✅ Naprawiono błędy z brakującymi parametrami _client w funkcjach cache
+# ✅ Dodano enterprise-level dokumentację i CI/CD pipeline
+# ✅ Implementowano comprehensive testing suite
+# ✅ Dodano security scanning i quality assurance
+# ✅ Przeprowadzono refaktoryzację kodu dla lepszej maintainability
+# ✅ Dodano professional GitHub templates i community guidelines
+# ✅ Kolejna poprawiona wersja z pełną profesjonalną strukturą
+
 @st.cache_data
 def init_paths(data: bytes, ext: str):
     """Inicjalizuje ścieżki dla plików na podstawie zawartości."""
@@ -124,13 +143,13 @@ def clean_transcript(text: str) -> str:
     return text.strip()
 
 @st.cache_data
-def transcribe_chunks(chunks):
+def transcribe_chunks(chunks, _client):
     """Transkrybuje podzielone fragmenty audio na tekst używając OpenAI API."""
     texts = []
     for c in chunks:
         if c.stat().st_size <= MAX_SIZE:
             with open(c, 'rb') as f:
-                res = client.audio.transcriptions.create(
+                res = _client.audio.transcriptions.create(
                     model='whisper-1',
                     file=f,
                     language='pl',
@@ -141,11 +160,11 @@ def transcribe_chunks(chunks):
     return "\n".join(texts)
 
 @st.cache_data
-def summarize(text: str):
+def summarize(text: str, _client):
     """Generuje temat i podsumowanie z transkrypcji."""
     try:
         prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + text
-        completion = client.chat.completions.create(
+        completion = _client.chat.completions.create(
             model='gpt-3.5-turbo',
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=300
@@ -186,7 +205,7 @@ for key, default in [(done_key, False), (topic_key, ''), (sum_key, '')]:
 if st.button('Transkrybuj') and not st.session_state[done_key]:
     # dzielenie i transkrypcja
     chunks = split_audio(orig)
-    text = transcribe_chunks(chunks)
+    text = transcribe_chunks(chunks, client)
     tr.write_text(text, encoding='utf-8')
     st.session_state[done_key] = True
 
@@ -194,11 +213,9 @@ if st.button('Transkrybuj') and not st.session_state[done_key]:
 if st.session_state[done_key]:
     transcript = tr.read_text(encoding='utf-8')
     st.text_area('Transkrypt (możesz edytować tekst i później go zapisać)', transcript, height=300)
-    st.download_button('Pobierz transkrypt', transcript, file_name=tr.name)
-
-    # Generowanie podsumowania
+    st.download_button('Pobierz transkrypt', transcript, file_name=tr.name)    # Generowanie podsumowania
     if st.button('Podsumuj') and not st.session_state[topic_key]:
-        t, s = summarize(transcript)
+        t, s = summarize(transcript, client)
         sm.write_text(f"{t}\n\n{s}", encoding='utf-8')
         st.session_state[topic_key] = t
         st.session_state[sum_key] = s

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/AlanSteinbarth/Audio2Tekst/discussions
+    about: Zadaj pytanie lub rozpocznij dyskusję z społecznością
+  - name: 📧 Email Support
+    url: mailto:alan.steinbarth@gmail.com
+    about: Skontaktuj się bezpośrednio z autorem
+  - name: 🔒 Security Issues
+    url: https://github.com/AlanSteinbarth/Audio2Tekst/security/advisories/new
+    about: Zgłoś problem bezpieczeństwa (prywatnie)

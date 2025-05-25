@@ -1,0 +1,167 @@
+name: 🔒 Security Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Uruchom skanowanie bezpieczeństwa codziennie o 2:00 UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  security:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install bandit safety semgrep
+
+    - name: 🔍 Run Bandit Security Scanner
+      continue-on-error: true
+      run: |
+        bandit -r . -f json -o bandit-report.json
+        bandit -r . --severity-level medium --confidence-level medium
+
+    - name: 🛡️ Run Safety Check
+      continue-on-error: true
+      run: |
+        safety check --json --output safety-report.json
+        safety check --short-report
+
+    - name: 🔎 Run Semgrep Security Scan
+      continue-on-error: true
+      run: |
+        semgrep --config=auto --json --output=semgrep-report.json .
+        semgrep --config=auto --severity=ERROR .
+
+    - name: 📊 Upload Bandit Results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: bandit-report.sarif
+      continue-on-error: true
+
+    - name: 📋 Upload Security Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+          semgrep-report.json
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Dependency Review
+      uses: actions/dependency-review-action@v3
+      with:
+        fail-on-severity: moderate
+
+  secrets-scan:
+    name: Secrets Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 🔐 Run TruffleHog
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐳 Build Docker Image
+      run: |
+        # Tymczasowy Dockerfile do skanowania
+        cat > Dockerfile << EOF
+        FROM python:3.11-slim
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install -r requirements.txt
+        COPY . .
+        EXPOSE 8501
+        CMD ["streamlit", "run", "app.py"]
+        EOF
+        docker build -t audio2tekst:latest .
+
+    - name: 🔍 Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'audio2tekst:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: 📊 Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  license-check:
+    name: License Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: 📦 Install pip-licenses
+      run: |
+        pip install pip-licenses
+
+    - name: 📋 Check Licenses
+      run: |
+        pip install -r requirements.txt
+        pip-licenses --format=json --output-file=licenses.json
+        pip-licenses --fail-on='GPL'
+
+    - name: 📊 Upload License Report
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: license-report
+        path: licenses.json

@@ -1,0 +1,2 @@
+# Ten plik zapewnia, że folder db/ będzie śledzony przez Git
+# Usuń ten plik gdy dodasz pierwszą bazę danych lub schemat

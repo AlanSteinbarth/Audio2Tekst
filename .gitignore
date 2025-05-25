@@ -1,7 +1,169 @@
+# =============================================================================
+# Audio2Tekst - Git Ignore Rules
+# =============================================================================
+
+# Environment & Configuration
 .env
+.env.local
+.env.development
+.env.production
+.env.test
+*.env
+
+# Application Data
 uploads/
+logs/
+temp/
+cache/
 *.log
-venv/
+*.log.*
+
+# Python
 *.pyc
+*.pyo
+*.pyd
 __pycache__/
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+.ENV/
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Documentation
+docs/_build/
+.readthedocs.yml
+site/
+
+# Package managers
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+nosetests.xml
+pytest.xml
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Security & Secrets
+secrets/
+*.pem
+*.key
+*.cert
+*.crt
+id_rsa*
+id_dsa*
+known_hosts
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+.tmp/
+
+# OS generated files
+.DS_Store?
+ehthumbs.db
+Icon?
+Thumbs.db
+*.lnk
+
+# Audio/Video files (uploads)
+*.mp3
+*.mp4
+*.wav
+*.avi
+*.mov
+*.webm
+*.m4a
+*.flac
+*.ogg
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Large files
+*.dmp
+*.dump
+
+# Local development
+local/
+local_*
+dev/
+development/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Monitoring & Profiling
+.prof
+*.prof
