@@ -21,28 +21,25 @@ class TestAudioProcessing:
     
     def test_init_paths(self, temp_dir, sample_audio_data):
         """Test inicjalizacji ścieżek plików."""
-        # Mock funkcji z app.py
-        with patch('app.BASE_DIR', temp_dir):
-            # Symulacja funkcji init_paths
-            data = sample_audio_data
-            ext = ".wav"
-            uid = hashlib.md5(data).hexdigest()
-            
-            orig = temp_dir / "originals" / f"{uid}{ext}"
-            tr = temp_dir / "transcripts" / f"{uid}.txt"
-            sm = temp_dir / "summaries" / f"{uid}.txt"
-            
-            # Tworzenie katalogów
-            orig.parent.mkdir(parents=True, exist_ok=True)
-            tr.parent.mkdir(parents=True, exist_ok=True)
-            sm.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Zapisanie pliku
-            orig.write_bytes(data)
-            
-            assert orig.exists()
-            assert orig.stat().st_size == len(data)
-            assert uid == hashlib.md5(data).hexdigest()
+        # Symulacja funkcji init_paths bez importu app.py
+        data = sample_audio_data
+        ext = ".wav"
+        uid = hashlib.md5(data).hexdigest()
+        
+        orig = temp_dir / "originals" / f"{uid}{ext}"
+        tr = temp_dir / "transcripts" / f"{uid}.txt"
+        sm = temp_dir / "summaries" / f"{uid}.txt"
+        
+        # Tworzenie katalogów
+        orig.parent.mkdir(parents=True, exist_ok=True)
+        tr.parent.mkdir(parents=True, exist_ok=True)
+        sm.parent.mkdir(parents=True, exist_ok=True)
+          # Zapisanie pliku
+        orig.write_bytes(data)
+        
+        assert orig.exists()
+        assert orig.stat().st_size == len(data)
+        assert uid == hashlib.md5(data).hexdigest()
     
     def test_clean_transcript(self):
         """Test czyszczenia transkrypcji."""
@@ -89,8 +86,7 @@ class TestOpenAIIntegration:
                         )
                         texts.append(res.text)
             return "\n".join(texts)
-        
-        # Test
+          # Test
         chunks = [test_file]
         result = transcribe_chunks(chunks, mock_openai_client)
         
@@ -111,19 +107,26 @@ class TestOpenAIIntegration:
                 
                 if completion and completion.choices and completion.choices[0].message:
                     content = completion.choices[0].message.content
-                    lines = content.split('\n', 1)
-                    if len(lines) >= 2:
-                        topic = lines[0].replace('Temat:', '').strip()
-                        summary = lines[1].replace('Podsumowanie:', '').strip()
-                        return topic, summary
-                    return content, ""
+                    if content:
+                        lines = content.split('\n', 1)
+                        if len(lines) >= 2:
+                            topic = lines[0].replace('Temat:', '').strip()
+                            summary = lines[1].replace('Podsumowanie:', '').strip()
+                            return topic, summary
+                        return content, ""
+                return "Nie udało się wygenerować tematu", "Nie udało się wygenerować podsumowania"
             except Exception:
                 return "Nie udało się wygenerować podsumowania", "Spróbuj ponownie"
         
         # Test
         test_text = "To jest długi tekst do podsumowania..."
-        topic, summary = summarize(test_text, mock_openai_client)
+        result = summarize(test_text, mock_openai_client)
         
+        # Sprawdzenie czy zwrócono tuple
+        assert isinstance(result, tuple), f"Expected tuple, got {type(result)}"
+        assert len(result) == 2, f"Expected tuple of length 2, got {len(result)}"
+        
+        topic, summary = result
         assert topic == "Test audio"
         assert summary == "To jest przykładowe podsumowanie wygenerowane przez AI."
         mock_openai_client.chat.completions.create.assert_called_once()
