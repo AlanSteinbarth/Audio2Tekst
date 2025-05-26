@@ -75,31 +75,21 @@ jobs:
           --exclude='logs/*' \
           --exclude='tests/' \
           --exclude='.pytest_cache' \
-          --exclude='htmlcov' \
-          --exclude='*.log' \
+          --exclude='htmlcov' \          --exclude='*.log' \
           .
 
     - name: 🎉 Create GitHub Release
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v1
       id: create_release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ steps.changelog.outputs.version }}
-        release_name: Audio2Tekst ${{ steps.changelog.outputs.version }}
+        name: Audio2Tekst ${{ steps.changelog.outputs.version }}
         body: ${{ steps.changelog.outputs.changelog }}
         draft: false
         prerelease: ${{ contains(steps.changelog.outputs.version, 'alpha') || contains(steps.changelog.outputs.version, 'beta') || contains(steps.changelog.outputs.version, 'rc') }}
-
-    - name: 📎 Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./audio2tekst-${{ steps.changelog.outputs.version }}.tar.gz
-        asset_name: audio2tekst-${{ steps.changelog.outputs.version }}.tar.gz
-        asset_content_type: application/gzip
+        files: ./audio2tekst-${{ steps.changelog.outputs.version }}.tar.gz
 
   deploy:
     name: Deploy Documentation

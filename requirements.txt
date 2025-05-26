@@ -12,11 +12,6 @@ yt-dlp>=2023.7.6
 ffmpeg-python>=0.2.0
 pydub>=0.25.1
 
-# Utilities
-pathlib-compat>=1.0.0
-hashlib-compat>=1.0.0
-tempfile-compat>=1.0.0
-
 # =============================================================================
 # Development Dependencies (install with: pip install -r requirements-dev.txt)
 # =============================================================================
