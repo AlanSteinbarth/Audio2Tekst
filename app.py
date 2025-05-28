@@ -5,18 +5,18 @@ Audio2Tekst
 Ten moduł zawiera implementację aplikacji Streamlit do transkrypcji
 plików audio i video na tekst oraz generowania ich podsumowań.
 
-🚀 WERSJA 2.2.0 - ENTERPRISE EDITION (ENHANCED) 🚀
-- Finalna wersja z kompletną infrastrukturą enterprise
-- Dodano enterprise-level dokumentację i CI/CD
-- Implementowano kompletny system testów i security scanning
-- Przeprowadzono refaktoryzację kodu z poprawkami błędów
-- Dodano professional project structure i GitHub templates
-- Kolejna poprawiona wersja z pełną profesjonalną strukturą
+🚀 WERSJA 2.3.0 - CROSS-PLATFORM EDITION 🚀
+- Uniwersalna kompatybilność z Windows, macOS i Linux
+- Dodano automatyczne wykrywanie i obsługę różnych systemów operacyjnych
+- Poprawiono ścieżki plików i komendy systemowe dla wszystkich platform
+- Ulepszona obsługa enkodowania i plików tymczasowych
+- Dodano sprawdzanie dostępności narzędzi systemowych (FFmpeg/FFprobe)
+- Zwiększona stabilność i niezawodność na różnych środowiskach
 
 Autor: Alan Steinbarth (alan.steinbarth@gmail.com)
 GitHub: https://github.com/AlanSteinbarth
-Data: 26 maja 2025
-Wersja: 2.2.0 (Enterprise Edition Enhanced)
+Data: 29 maja 2025
+Wersja: 2.3.0 (Cross-Platform Edition)
 """
 
 # --- Importy systemowe ---
@@ -28,7 +28,9 @@ import tempfile
 import os
 import shutil
 import subprocess
+import platform
 from pathlib import Path
+from typing import Optional
 
 # --- Importy zewnętrzne ---
 import streamlit as st
@@ -40,10 +42,116 @@ import yt_dlp
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# --- Funkcje pomocnicze dla kompatybilności systemów ---
+def get_system_info() -> dict:
+    """Zwraca informacje o systemie operacyjnym."""
+    return {
+        'platform': platform.system().lower(),
+        'architecture': platform.machine(),
+        'python_version': platform.python_version(),
+        'is_windows': platform.system().lower() == 'windows',
+        'is_macos': platform.system().lower() == 'darwin',
+        'is_linux': platform.system().lower() == 'linux'
+    }
+
+def find_executable(name: str) -> Optional[str]:
+    """Znajduje ścieżkę do pliku wykonywalnego w systemie."""
+    system_info = get_system_info()
+    
+    # Na Windows dodaj .exe jeśli nie ma rozszerzenia
+    if system_info['is_windows'] and not name.endswith('.exe'):
+        name += '.exe'
+    
+    # Sprawdź czy jest dostępny w PATH
+    if shutil.which(name):
+        return shutil.which(name)
+    
+    # Sprawdź typowe lokalizacje
+    common_paths = []
+    if system_info['is_windows']:
+        common_paths = [
+            'C:\\ffmpeg\\bin',
+            'C:\\Program Files\\ffmpeg\\bin',
+            'C:\\Program Files (x86)\\ffmpeg\\bin'
+        ]
+    elif system_info['is_macos']:
+        common_paths = [
+            '/usr/local/bin',
+            '/opt/homebrew/bin',
+            '/usr/bin'
+        ]
+    else:  # Linux
+        common_paths = [
+            '/usr/bin',
+            '/usr/local/bin',
+            '/snap/bin'
+        ]
+    
+    for path in common_paths:
+        full_path = Path(path) / name
+        if full_path.exists() and full_path.is_file():
+            return str(full_path)
+    
+    return None
+
+def check_dependencies() -> dict:
+    """Sprawdza dostępność wymaganych narzędzi systemowych."""
+    dependencies = {
+        'ffmpeg': find_executable('ffmpeg'),
+        'ffprobe': find_executable('ffprobe')
+    }
+    
+    return {
+        name: {
+            'available': path is not None,
+            'path': path
+        } for name, path in dependencies.items()
+    }
+
+def get_safe_encoding() -> str:
+    """Zwraca bezpieczne kodowanie dla systemu."""
+    system_info = get_system_info()
+    
+    if system_info['is_windows']:
+        # Windows może używać różnych kodowań
+        return 'utf-8-sig'  # BOM dla lepszej kompatybilności
+    else:
+        # Unix-like systemy standardowo używają UTF-8
+        return 'utf-8'
+
 # --- Konfiguracja Streamlit ---
 st.set_page_config(page_title="Audio2Tekst", layout="wide")
+
+# --- Sprawdzenie zależności systemowych ---
+system_info = get_system_info()
+dependencies = check_dependencies()
+
 st.title('📼Audio2Tekst📝')
-st.subheader("Przekształć swoje pliki audio i video (oraz z YouTube) na tekst, a następnie zrób z nich zwięzłe podsumowanie" )
+st.subheader("Przekształć swoje pliki audio i video (oraz z YouTube) na tekst, a następnie zrób z nich zwięzłe podsumowanie")
+
+# Wyświetl informacje o systemie i zależnościach
+with st.expander("ℹ️ Informacje o systemie", expanded=False):
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**System:**")
+        st.write(f"- Platform: {system_info['platform'].title()}")
+        st.write(f"- Architecture: {system_info['architecture']}")
+        st.write(f"- Python: {system_info['python_version']}")
+    
+    with col2:
+        st.write("**Zależności:**")
+        for dep_name, dep_info in dependencies.items():
+            status = "✅" if dep_info['available'] else "❌"
+            st.write(f"- {dep_name}: {status}")
+            if dep_info['available']:
+                st.write(f"  📁 {dep_info['path']}")
+
+# Sprawdź czy wszystkie zależności są dostępne
+missing_deps = [name for name, info in dependencies.items() if not info['available']]
+if missing_deps:
+    st.error(f"⚠️ Brakujące zależności: {', '.join(missing_deps)}")
+    st.error("Zainstaluj FFmpeg aby kontynuować. Zobacz instrukcje instalacji w README.md")
+    st.stop()
 
 # --- Konfiguracja OpenAI ---
 api_key = st.sidebar.text_input("Podaj swój OpenAI API Key", type="password")
@@ -61,15 +169,13 @@ CHUNK_MS = 5 * 60 * 1000     # 5 minutes in ms
 
 # --- Funkcje pomocnicze ---
 # UWAGA: To jest ulepszona wersja programu Audio2Tekst
-# Główne usprawnienia w wersji 2.2.0:
-# ✅ Finalna wersja enterprise z kompletną infrastrukturą
-# ✅ Naprawiono błędy z brakującymi parametrami _client w funkcjach cache
-# ✅ Dodano enterprise-level dokumentację i CI/CD pipeline
-# ✅ Implementowano comprehensive testing suite
-# ✅ Dodano security scanning i quality assurance
-# ✅ Przeprowadzono refaktoryzację kodu dla lepszej maintainability
-# ✅ Dodano professional GitHub templates i community guidelines
-# ✅ Kolejna poprawiona wersja z pełną profesjonalną strukturą
+# Główne usprawnienia w wersji 2.3.0:
+# ✅ Uniwersalna kompatybilność z Windows, macOS i Linux
+# ✅ Automatyczne wykrywanie platformy i dostosowanie komend
+# ✅ Poprawiona obsługa ścieżek plików i enkodowania
+# ✅ Dodano sprawdzanie dostępności narzędzi systemowych
+# ✅ Ulepszona obsługa plików tymczasowych
+# ✅ Zwiększona stabilność na różnych środowiskach
 
 @st.cache_data
 def init_paths(data: bytes, ext: str):
@@ -85,54 +191,122 @@ def init_paths(data: bytes, ext: str):
 @st.cache_data
 def download_youtube_audio(url: str):
     """Pobiera audio z filmu YouTube i konwertuje do odpowiedniego formatu."""
-    tmpdir = tempfile.mkdtemp()
-    opts = {
-        'format': 'bestaudio[ext=webm]/bestaudio',
-        'outtmpl': os.path.join(tmpdir, '%(id)s.%(ext)s'),
-        'quiet': True,
-        'noplaylist': True
-    }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
-    for f in Path(tmpdir).iterdir():
-        if f.suffix.lower() in ALLOWED_EXT:
-            data = f.read_bytes()
+    tmpdir = tempfile.mkdtemp(prefix='audio2tekst_yt_')
+    
+    try:
+        # Użyj bezpiecznych ścieżek dla różnych systemów
+        output_template = str(Path(tmpdir) / '%(id)s.%(ext)s')
+        
+        opts = {
+            'format': 'bestaudio[ext=webm]/bestaudio',
+            'outtmpl': output_template,
+            'quiet': True,
+            'noplaylist': True,
+            'extractaudio': True,
+            'audioformat': 'webm',
+            'prefer_ffmpeg': True
+        }
+        
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+        
+        # Znajdź pobrany plik
+        for f in Path(tmpdir).iterdir():
+            if f.suffix.lower() in ALLOWED_EXT and f.is_file():
+                data = f.read_bytes()
+                return data, f.suffix.lower()
+        
+        raise FileNotFoundError("Nie znaleziono pliku audio z YouTube")
+    
+    except Exception as e:
+        logger.error(f"Błąd podczas pobierania z YouTube: {str(e)}")
+        raise RuntimeError(f"Nie udało się pobrać audio z YouTube: {str(e)}")
+    
+    finally:
+        # Bezpieczne usunięcie tymczasowego katalogu
+        try:
             shutil.rmtree(tmpdir)
-            return data, f.suffix.lower()
-    shutil.rmtree(tmpdir)
-    raise FileNotFoundError("Nie znaleziono pliku audio z YouTube")
+        except Exception as e:
+            logger.warning(f"Nie udało się usunąć tymczasowego katalogu: {e}")
 
 @st.cache_data
 def get_duration(path: Path) -> float:
     """Zwraca długość pliku audio/video w sekundach."""
+    # Sprawdź dostępność ffprobe
+    deps = check_dependencies()
+    if not deps['ffprobe']['available']:
+        raise RuntimeError("FFprobe nie jest dostępne w systemie. Zainstaluj FFmpeg.")
+    
+    ffprobe_path = deps['ffprobe']['path']
     cmd = [
-        'ffprobe', '-v', 'error',
+        ffprobe_path, '-v', 'error',
         '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1',
         str(path)
     ]
-    out = subprocess.run(cmd, capture_output=True, text=True)
-    return float(out.stdout.strip())
+    
+    try:
+        result = subprocess.run(
+            cmd, 
+            capture_output=True, 
+            text=True, 
+            timeout=30,  # timeout dla bezpieczeństwa
+            check=True
+        )
+        return float(result.stdout.strip())
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Przekroczono czas oczekiwania na analizę pliku")
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Błąd podczas analizy pliku: {e}")
+    except ValueError as e:
+        raise RuntimeError(f"Nie można odczytać długości pliku: {e}")
 
 @st.cache_data
 def split_audio(path: Path):
-    """Dzieli długie pliki audio na mniejsze części do przetworzenia."""
+    """Dzieli długie pliki audio na mniejsze części do przetworzenia."""    # Sprawdź dostępność ffmpeg
+    deps = check_dependencies()
+    if not deps['ffmpeg']['available']:
+        raise RuntimeError("FFmpeg nie jest dostępne w systemie. Zainstaluj FFmpeg.")
+    ffmpeg_path = deps['ffmpeg']['path']
     duration = get_duration(path)
     seg_sec = CHUNK_MS / 1000
     parts = []
+    
     for i in range(math.ceil(duration / seg_sec)):
         start = i * seg_sec
         length = seg_sec if (start + seg_sec) <= duration else (duration - start)
-        fd, tmp = tempfile.mkstemp(suffix=path.suffix)
+        
+        # Utwórz tymczasowy plik w sposób bezpieczny dla wszystkich platform
+        fd, tmp = tempfile.mkstemp(suffix=path.suffix, prefix='audio2tekst_')
         os.close(fd)
         tmp_path = Path(tmp)
+        
         cmd = [
-            'ffmpeg', '-y', '-i', str(path),
+            ffmpeg_path, '-y', '-i', str(path),
             '-ss', str(start), '-t', str(length),
             '-c', 'copy', str(tmp_path)
         ]
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        parts.append(tmp_path)
+        
+        try:
+            subprocess.run(
+                cmd, 
+                stdout=subprocess.DEVNULL, 
+                stderr=subprocess.PIPE,
+                timeout=300,  # 5 minut timeout
+                check=True,
+                text=True
+            )
+            parts.append(tmp_path)
+        except subprocess.TimeoutExpired:
+            if tmp_path.exists():
+                tmp_path.unlink()
+            raise RuntimeError(f"Przekroczono czas oczekiwania podczas dzielenia pliku (segment {i+1})")
+        except subprocess.CalledProcessError as e:
+            if tmp_path.exists():
+                tmp_path.unlink()
+            logger.error(f"FFmpeg error: {e.stderr}")
+            raise RuntimeError(f"Błąd podczas dzielenia pliku (segment {i+1}): {e}")
+    
     return parts
 
 @st.cache_data
@@ -147,16 +321,28 @@ def transcribe_chunks(chunks, _client):
     """Transkrybuje podzielone fragmenty audio na tekst używając OpenAI API."""
     texts = []
     for c in chunks:
-        if c.stat().st_size <= MAX_SIZE:
-            with open(c, 'rb') as f:
-                res = _client.audio.transcriptions.create(
-                    model='whisper-1',
-                    file=f,
-                    language='pl',
-                    response_format='text'
-                )
-                texts.append(clean_transcript(str(res)))
-        c.unlink()
+        try:
+            if c.stat().st_size <= MAX_SIZE:
+                with open(c, 'rb') as f:
+                    res = _client.audio.transcriptions.create(
+                        model='whisper-1',
+                        file=f,
+                        language='pl',
+                        response_format='text'
+                    )
+                    texts.append(clean_transcript(str(res)))
+            else:
+                logger.warning(f"Plik {c} przekracza maksymalny rozmiar {MAX_SIZE} bajtów")
+        except Exception as e:
+            logger.error(f"Błąd podczas transkrypcji fragmentu {c}: {str(e)}")
+        finally:
+            # Bezpieczne usunięcie pliku tymczasowego
+            try:
+                if c.exists():
+                    c.unlink()
+            except Exception as e:
+                logger.warning(f"Nie udało się usunąć pliku tymczasowego {c}: {e}")
+    
     return "\n".join(texts)
 
 @st.cache_data
@@ -206,17 +392,21 @@ if st.button('Transkrybuj') and not st.session_state[done_key]:
     # dzielenie i transkrypcja
     chunks = split_audio(orig)
     text = transcribe_chunks(chunks, client)
-    tr.write_text(text, encoding='utf-8')
+    encoding = get_safe_encoding()
+    tr.write_text(text, encoding=encoding)
     st.session_state[done_key] = True
 
 # --- Wyświetlanie wyników ---
 if st.session_state[done_key]:
-    transcript = tr.read_text(encoding='utf-8')
+    encoding = get_safe_encoding()
+    transcript = tr.read_text(encoding=encoding)
     st.text_area('Transkrypt (możesz edytować tekst i później go zapisać)', transcript, height=300)
-    st.download_button('Pobierz transkrypt', transcript, file_name=tr.name)    # Generowanie podsumowania
+    st.download_button('Pobierz transkrypt', transcript, file_name=tr.name)
+    
+    # Generowanie podsumowania
     if st.button('Podsumuj') and not st.session_state[topic_key]:
         t, s = summarize(transcript, client)
-        sm.write_text(f"{t}\n\n{s}", encoding='utf-8')
+        sm.write_text(f"{t}\n\n{s}", encoding=encoding)
         st.session_state[topic_key] = t
         st.session_state[sum_key] = s
 

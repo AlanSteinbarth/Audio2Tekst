@@ -13,6 +13,37 @@ Projekt przestrzega zasad [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.3.0] - 2025-05-29
+
+### ✨ Dodano
+- **Uniwersalna kompatybilność** - pełna obsługa Windows, macOS i Linux
+- **Automatyczne wykrywanie platformy** - inteligentne dostosowanie do systemu operacyjnego
+- **Sprawdzanie zależności** - automatyczna weryfikacja dostępności FFmpeg/FFprobe
+- **Panel informacji o systemie** - wyświetlanie szczegółów platformy i zależności
+- **Bezpieczne ścieżki plików** - prawidłowa obsługa ścieżek na wszystkich systemach
+- **Ulepszone kodowanie** - odpowiednie kodowanie plików tekstowych (UTF-8/UTF-8-sig)
+- **Timeout i error handling** - lepsze zarządzanie błędami i timeoutami
+
+### 🔧 Zmieniono
+- **Komendy systemowe** - używanie pełnych ścieżek do FFmpeg/FFprobe
+- **Obsługa plików tymczasowych** - bezpieczniejsze tworzenie i usuwanie
+- **YouTube download** - stabilniejsze pobieranie z różnymi konfiguracjami systemów
+- **Transkrypcja** - ulepszona obsługa błędów podczas przetwarzania
+
+### 🛠️ Poprawiono
+- Kompatybilność między różnymi systemami operacyjnymi
+- Stabilność na macOS (Homebrew, system paths)
+- Obsługa Windows (ścieżki z .exe, kodowanie)
+- Reliability na Linux (snap packages, różne dystrybucje)
+
+### 📦 Zmiany techniczne
+- Aktualizacja wersji do 2.3.0 Cross-Platform Edition
+- Dodane funkcje pomocnicze dla kompatybilności systemów
+- Improved logging i error reporting
+- Enhanced file handling dla różnych platform
+
+---
+
 ## [2.2.0] - 2025-01-25
 
 ### ✨ Dodano
