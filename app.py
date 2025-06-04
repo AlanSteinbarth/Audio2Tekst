@@ -31,6 +31,8 @@ import subprocess
 import platform
 from pathlib import Path
 from typing import Optional
+import time
+import threading
 
 # --- Importy zewnętrzne ---
 import streamlit as st
@@ -126,7 +128,7 @@ st.set_page_config(page_title="Audio2Tekst", layout="wide")
 system_info = get_system_info()
 dependencies = check_dependencies()
 
-st.title('📼Audio2Tekst📝')
+st.title('📼 Audio2Tekst 📝')
 st.subheader("Przekształć swoje pliki audio i video (oraz z YouTube) na tekst, a następnie zrób z nich zwięzłe podsumowanie")
 
 # Wyświetl informacje o systemie i zależnościach
@@ -145,6 +147,14 @@ with st.expander("ℹ️ Informacje o systemie", expanded=False):
             st.write(f"- {dep_name}: {status}")
             if dep_info['available']:
                 st.write(f"  📁 {dep_info['path']}")
+    
+    st.write("---")
+    st.write("**📋 Przetwarzanie długich tekstów:**")
+    st.write("• W przypadku bardzo długich transkrypcji (>8000 znaków)")
+    st.write("• Tekst jest automatycznie dzielony na fragmenty")
+    st.write("• Każdy fragment jest podsumowywany osobno")
+    st.write("• Na końcu generowane jest finalne podsumowanie całości")
+    st.write("• Rozwiązuje to ograniczenia OpenAI związane z długością promptu")
 
 # Sprawdź czy wszystkie zależności są dostępne
 missing_deps = [name for name, info in dependencies.items() if not info['available']]
@@ -320,50 +330,126 @@ def clean_transcript(text: str) -> str:
 def transcribe_chunks(chunks, _client):
     """Transkrybuje podzielone fragmenty audio na tekst używając OpenAI API."""
     texts = []
-    for c in chunks:
-        try:
-            if c.stat().st_size <= MAX_SIZE:
-                with open(c, 'rb') as f:
-                    res = _client.audio.transcriptions.create(
-                        model='whisper-1',
-                        file=f,
-                        language='pl',
-                        response_format='text'
-                    )
-                    texts.append(clean_transcript(str(res)))
-            else:
-                logger.warning(f"Plik {c} przekracza maksymalny rozmiar {MAX_SIZE} bajtów")
-        except Exception as e:
-            logger.error(f"Błąd podczas transkrypcji fragmentu {c}: {str(e)}")
-        finally:
-            # Bezpieczne usunięcie pliku tymczasowego
+    long_transcription_msg = "Plik audio poddawany transkrypcji jest bardzo duży. Potrzebuję więcej czasu. Cierpliwości..."
+    show_long_msg = [False]
+    def delayed_info():
+        time.sleep(10)
+        show_long_msg[0] = True
+        st.info(long_transcription_msg)
+    thread = threading.Thread(target=delayed_info)
+    thread.start()
+    with st.spinner("Transkrypcja w toku..."):
+        for c in chunks:
             try:
-                if c.exists():
-                    c.unlink()
+                if c.stat().st_size <= MAX_SIZE:
+                    with open(c, 'rb') as f:
+                        res = _client.audio.transcriptions.create(
+                            model='whisper-1',
+                            file=f,
+                            language='pl',
+                            response_format='text'
+                        )
+                        texts.append(clean_transcript(str(res)))
+                else:
+                    logger.warning(f"Plik {c} przekracza maksymalny rozmiar {MAX_SIZE} bajtów")
             except Exception as e:
-                logger.warning(f"Nie udało się usunąć pliku tymczasowego {c}: {e}")
-    
+                logger.error(f"Błąd podczas transkrypcji fragmentu {c}: {str(e)}")
+            finally:
+                # Bezpieczne usunięcie pliku tymczasowego
+                try:
+                    if c.exists():
+                        c.unlink()
+                except Exception as e:
+                    logger.warning(f"Nie udało się usunąć pliku tymczasowego {c}: {e}")
     return "\n".join(texts)
 
 @st.cache_data
 def summarize(text: str, _client):
-    """Generuje temat i podsumowanie z transkrypcji."""
+    """Generuje temat i podsumowanie z transkrypcji, dzieląc długi tekst na fragmenty."""
+    log_path = Path("logs/summary_errors.log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    long_summary_msg = "Tekst jest bardzo długi. Generowanie podsumowania zajmie trochę czasu. Cierpliwości..."
     try:
-        prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + text
-        completion = _client.chat.completions.create(
-            model='gpt-3.5-turbo',
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=300
-        )
-        if completion and completion.choices and completion.choices[0].message:
-            content = completion.choices[0].message.content
-            lines = content.splitlines() if content else []
-            topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
-            summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
-            return topic, summary
+        MAX_CHUNK = 8000  # znaków na fragment (bezpieczny limit)
+        if len(text) > MAX_CHUNK:
+            st.info(long_summary_msg)
+            chunks = [text[i:i+MAX_CHUNK] for i in range(0, len(text), MAX_CHUNK)]
+            partial_summaries = []
+            for idx, chunk in enumerate(chunks):
+                with st.spinner(f"Podsumowywanie fragmentu {idx+1}/{len(chunks)}..."):
+                    try:
+                        prompt = f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami (fragment {idx+1}/{len(chunks)}):\n" + chunk
+                        completion = _client.chat.completions.create(
+                            model='gpt-3.5-turbo',
+                            messages=[{'role': 'user', 'content': prompt}],
+                            max_tokens=300
+                        )
+                        if completion and completion.choices and completion.choices[0].message:
+                            content = completion.choices[0].message.content
+                            partial_summaries.append(content)
+                        else:
+                            raise Exception("Brak odpowiedzi z modelu OpenAI")
+                    except Exception as e:
+                        msg = f"Błąd fragmentu {idx+1}: {e}\n"
+                        logger.error(msg)
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                        st.error(f"Błąd podczas podsumowywania fragmentu {idx+1}: {e}")
+                        return "Błąd podczas podsumowywania fragmentu", str(e)
+            with st.spinner("Tworzenie końcowego podsumowania..."):
+                try:
+                    final_prompt = "Oto podsumowania fragmentów długiego tekstu. Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n" + "\n".join(partial_summaries)
+                    completion = _client.chat.completions.create(
+                        model='gpt-3.5-turbo',
+                        messages=[{'role': 'user', 'content': final_prompt}],
+                        max_tokens=300
+                    )
+                    if completion and completion.choices and completion.choices[0].message:
+                        content = completion.choices[0].message.content
+                        lines = content.splitlines() if content else []
+                        topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
+                        summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
+                        return topic, summary
+                    else:
+                        raise Exception("Brak odpowiedzi z modelu OpenAI (final)")
+                except Exception as e:
+                    msg = f"Błąd końcowego podsumowania: {e}\n"
+                    logger.error(msg)
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                    st.error(f"Błąd podczas generowania końcowego podsumowania: {e}")
+                    return "Błąd podczas generowania końcowego podsumowania", str(e)
+        else:
+            with st.spinner("Podsumowywanie tekstu..."):
+                try:
+                    prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + text
+                    completion = _client.chat.completions.create(
+                        model='gpt-3.5-turbo',
+                        messages=[{'role': 'user', 'content': prompt}],
+                        max_tokens=300
+                    )
+                    if completion and completion.choices and completion.choices[0].message:
+                        content = completion.choices[0].message.content
+                        lines = content.splitlines() if content else []
+                        topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
+                        summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
+                        return topic, summary
+                    else:
+                        raise Exception("Brak odpowiedzi z modelu OpenAI (krótki tekst)")
+                except Exception as e:
+                    msg = f"Błąd podsumowania krótkiego tekstu: {e}\n"
+                    logger.error(msg)
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                    st.error(f"Błąd podczas podsumowywania tekstu: {e}")
+                    return "Błąd podczas podsumowywania tekstu", str(e)
     except Exception as e:
-        logger.error(f"Błąd podczas generowania podsumowania: {str(e)}")
-        return "Błąd podczas generowania podsumowania", str(e)
+        msg = f"Błąd ogólny podsumowania: {e}\n"
+        logger.error(msg)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+        st.error(f"Błąd ogólny podczas podsumowywania: {e}")
+        return "Błąd ogólny podczas podsumowywania", str(e)
     return "Nie udało się wygenerować podsumowania", "Spróbuj ponownie lub skontaktuj się z administratorem"
 
 # --- Interfejs użytkownika ---

@@ -13,6 +13,26 @@ Projekt przestrzega zasad [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.0] - 2025-06-04
+
+### ✨ Dodano
+- **Dokumentacja długich audio** - rozszerzona sekcja "System Information" o wyjaśnienie przetwarzania długich plików audio
+- **Automatyczne dzielenie długich audio** - szczegółowe informacje o chunking'u plików >25MB z overlappingiem
+- **Inteligentne łączenie tekstu** - opis procesu scalania fragmentów transkrypcji w spójny tekst
+- **Ulepszona dokumentacja użytkownika** - kompletne wyjaśnienie funkcjonalności w interfejsie aplikacji
+
+### 🔧 Zmieniono
+- **Sekcja informacji systemowych** - dodano szczegółowy opis przetwarzania długich tekstów (>8000 znaków)
+- **README.md** - zaktualizowano o trzy nowe bullet points opisujące możliwości aplikacji
+- **Interface użytkownika** - lepsze informowanie o funkcjonalnościach long audio processing
+
+### 📝 Dokumentacja
+- **CHANGELOG.md** - dodano dokumentację nowych funkcjonalności
+- **README.md** - rozszerzono opis o możliwości automatycznego dzielenia długich plików
+- **System Information** - dodano wyjaśnienie hierarchicznego podsumowywania
+
+---
+
 ## [2.3.0] - 2025-05-29
 
 ### ✨ Dodano
@@ -23,18 +43,30 @@ Projekt przestrzega zasad [Semantic Versioning](https://semver.org/).
 - **Bezpieczne ścieżki plików** - prawidłowa obsługa ścieżek na wszystkich systemach
 - **Ulepszone kodowanie** - odpowiednie kodowanie plików tekstowych (UTF-8/UTF-8-sig)
 - **Timeout i error handling** - lepsze zarządzanie błędami i timeoutami
+- **Inteligentne dzielenie długich tekstów** - automatyczny podział tekstów >8000 znaków
+- **Hierarchiczne podsumowywanie** - fragmenty→podsumowania→finalne podsumowanie
+- **Obsługa ograniczeń OpenAI** - rozwiązanie problemów z długością promptu
+- **Rozbudowane logowanie błędów** - szczegółowe logi w `logs/summary_errors.log`
+- **Ulepszone komunikaty UI** - spinnery i informacje o długich operacjach
+- **Threading dla UX** - asynchroniczne komunikaty o długotrwałych procesach
 
 ### 🔧 Zmieniono
 - **Komendy systemowe** - używanie pełnych ścieżek do FFmpeg/FFprobe
 - **Obsługa plików tymczasowych** - bezpieczniejsze tworzenie i usuwanie
 - **YouTube download** - stabilniejsze pobieranie z różnymi konfiguracjami systemów
 - **Transkrypcja** - ulepszona obsługa błędów podczas przetwarzania
+- **Funkcja summarize()** - przepisana z obsługą długich tekstów
+- **Komunikaty użytkownika** - bardziej opisowe i informacyjne
+- **Struktura logów** - automatyczne tworzenie folderów i timestampy
 
 ### 🛠️ Poprawiono
 - Kompatybilność między różnymi systemami operacyjnymi
 - Stabilność na macOS (Homebrew, system paths)
 - Obsługa Windows (ścieżki z .exe, kodowanie)
 - Reliability na Linux (snap packages, różne dystrybucje)
+- **Problem z długimi tekstami** - eliminacja błędów przekroczenia limitu tokenów
+- **UX podczas długich operacji** - lepsze informowanie użytkownika
+- **Obsługa błędów podsumowania** - szczegółowe logowanie i recovery
 
 ### 📦 Zmiany techniczne
 - Aktualizacja wersji do 2.3.0 Cross-Platform Edition

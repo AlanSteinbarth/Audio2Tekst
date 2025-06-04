@@ -17,6 +17,9 @@ Aplikacja webowa stworzona przy użyciu Streamlit, która umożliwia transkrypcj
 - ✅ **Transkrypcja plików lokalnych** - obsługa formatów: MP3, WAV, M4A, MP4, MOV, AVI, WEBM
 - ✅ **Transkrypcja z YouTube** - bezpośrednia transkrypcja audio z filmów YouTube
 - ✅ **Automatyczne podsumowanie** - generowanie tematu i podsumowania przy użyciu GPT-3.5
+- ✅ **Inteligentne dzielenie długich tekstów** - automatyczny podział tekstów >8000 znaków na fragmenty
+- ✅ **Hierarchiczne podsumowywanie** - fragmenty→podsumowania cząstkowe→finalne podsumowanie całości
+- ✅ **Obsługa ograniczeń OpenAI** - rozwiązanie problemów z długością promptu i limitem tokenów
 - ✅ **Czyszczenie transkrypcji** - usuwanie artefaktów mowy (um, uh, em, itp.)
 - ✅ **Podział długich plików** - automatyczny podział na 5-minutowe segmenty
 - ✅ **Eksport wyników** - pobieranie transkrypcji i podsumowań jako pliki tekstowe
