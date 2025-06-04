@@ -13,6 +13,35 @@ Projekt przestrzega zasad [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.4.0] - 2025-01-26
+
+### ✨ Dodano
+- **Inteligentna konwersja audio** - automatyczne przekształcanie plików video (MP4, WEBM, MOV, AVI) do formatu MP3 podczas pobierania
+- **Ulepszony layout UI** - przycisk pobierania audio przeniesiony bezpośrednio pod odtwarzacz dla lepszego UX
+- **Automatyczna detekcja formatu** - aplikacja rozpoznaje czy plik to audio czy video i odpowiednio dostosowuje opcje pobierania
+- **Session state dla YouTube** - zapobiega wielokrotnemu pobieraniu tego samego video z YouTube
+- **Ulepszone zarządzanie stanem** - lepsze cachowanie wyników dla poprawy wydajności
+
+### 🔧 Zmieniono
+- **Pozycja przycisku pobierania** - przycisk "Pobierz audio" teraz znajduje się bezpośrednio pod odtwarzaczem zamiast po sekcji transkrypcji
+- **Logika pobierania audio** - dla plików video pokazuje "Pobierz audio (MP3)", dla plików audio "Pobierz audio"
+- **Obsługa sesji YouTube** - lepsze zarządzanie stanem pobierania z YouTube, eliminuje dublowanie procesów
+- **Komunikaty użytkownika** - bardziej precyzyjne informacje o dostępnych formatach do pobrania
+
+### 🛠️ Poprawiono
+- **User Experience** - intuicyjniejsze umieszczenie kontrolek w interfejsie
+- **Wydajność konwersji** - optymalizacja procesu konwersji video do MP3
+- **Stabilność YouTube** - lepsze zarządzanie sesją przy pobieraniu z YouTube
+- **Error handling** - ulepszona obsługa błędów podczas konwersji formatów
+
+### 📦 Zmiany techniczne
+- Dodana logika wykrywania formatu pliku (audio vs video)
+- Implementacja automatycznej konwersji z FFmpeg
+- Ulepszone zarządzanie session state w Streamlit
+- Optymalizacja kodu do obsługi różnych formatów plików
+
+---
+
 ## [1.2.0] - 2025-06-04
 
 ### ✨ Dodano

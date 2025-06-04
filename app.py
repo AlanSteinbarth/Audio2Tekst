@@ -396,20 +396,15 @@ def summarize(text: str, _client):
     """Generuje temat i podsumowanie z transkrypcji, dzieląc długi tekst na fragmenty."""
     log_path = Path("logs/summary_errors.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    long_summary_msg = "Tekst jest bardzo długi. Generowanie podsumowania zajmie trochę czasu. Cierpliwości..."
-    
-    # Debug info
+    # Usunięto komunikat o długim tekście
     logger.info(f"Rozpoczynam summarize() - długość tekstu: {len(text)} znaków")
-    
     try:
         MAX_CHUNK = 8000  # znaków na fragment (bezpieczny limit)
         if len(text) > MAX_CHUNK:
             logger.info("Tekst jest długi - dzielę na fragmenty")
-            st.info(long_summary_msg)
             chunks = [text[i:i+MAX_CHUNK] for i in range(0, len(text), MAX_CHUNK)]
             logger.info(f"Podzielono na {len(chunks)} fragmentów")
             partial_summaries = []
-            
             for idx, chunk in enumerate(chunks):
                 logger.info(f"Przetwarzam fragment {idx+1}/{len(chunks)}")
                 with st.spinner(f"Podsumowywanie fragmentu {idx+1}/{len(chunks)}..."):
@@ -432,7 +427,6 @@ def summarize(text: str, _client):
                             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
                         st.error(f"Błąd podczas podsumowywania fragmentu {idx+1}: {e}")
                         return "Błąd podczas podsumowywania fragmentu", str(e)
-            
             logger.info(f"Zebrałem {len(partial_summaries)} częściowych podsumowań")
             if not partial_summaries:
                 st.error("Nie udało się wygenerować żadnego podsumowania fragmentów. Spróbuj ponownie lub sprawdź logi.")
@@ -512,28 +506,129 @@ error_message = None
 # Flaga do komunikatu o pobraniu audio z YouTube
 if 'yt_success' not in st.session_state:
     st.session_state['yt_success'] = False
+if 'yt_data' not in st.session_state:
+    st.session_state['yt_data'] = None
+if 'yt_ext' not in st.session_state:
+    st.session_state['yt_ext'] = None
 
 if src == 'YouTube':
     url = st.sidebar.text_input('Wklej adres www z YouTube:')
-    if url:
+    # Jeśli już pobrano audio, przypisz z sesji
+    if st.session_state['yt_success'] and st.session_state['yt_data'] and st.session_state['yt_ext']:
+        data = st.session_state['yt_data']
+        ext = st.session_state['yt_ext']
+        st.success("Pomyślnie pobrano audio z YouTube!")
+    elif url:
         try:
             with st.spinner("Pobieranie audio z YouTube..."):
                 data, ext = download_youtube_audio(url)
                 st.session_state['yt_success'] = True
+                st.session_state['yt_data'] = data
+                st.session_state['yt_ext'] = ext
+                st.success("Pomyślnie pobrano audio z YouTube!")
         except ValueError as e:
             st.warning(f"⚠️ {str(e)}")
             st.session_state['yt_success'] = False
+            st.session_state['yt_data'] = None
+            st.session_state['yt_ext'] = None
             st.stop()
         except RuntimeError as e:
             st.error(f"❌ {str(e)}")
             st.session_state['yt_success'] = False
+            st.session_state['yt_data'] = None
+            st.session_state['yt_ext'] = None
             st.stop()
         except Exception as e:
             st.error(f"❌ Wystąpił nieoczekiwany błąd: {str(e)}")
             logger.error(f"Nieoczekiwany błąd podczas pobierania z YouTube: {str(e)}")
             st.session_state['yt_success'] = False
+            st.session_state['yt_data'] = None
+            st.session_state['yt_ext'] = None
             st.stop()
-        if st.session_state['yt_success']:
-            st.success("Pomyślnie pobrano audio z YouTube!")
+        # Po pobraniu przypisz do lokalnych zmiennych
+        data = st.session_state['yt_data']
+        ext = st.session_state['yt_ext']
     else:
         st.session_state['yt_success'] = False
+        st.session_state['yt_data'] = None
+        st.session_state['yt_ext'] = None
+        st.stop()
+else:
+    up = st.sidebar.file_uploader('Wybierz plik', type=[e.strip('.') for e in ALLOWED_EXT])
+    if up:
+        data, ext = up.read(), Path(secure_filename(up.name)).suffix.lower()
+    else:
+        st.stop()
+
+# Sprawdź czy mamy dane do przetworzenia
+if data is None or ext is None:
+    st.stop()
+
+# --- Przetwarzanie pliku ---
+uid, orig, tr, sm = init_paths(data, ext)
+st.audio(orig.read_bytes(), format=ext.lstrip('.'))
+# Przycisk pobierania audio (zawsze pod odtwarzaczem)
+# Jeśli oryginalny plik to .mp4/.webm/.mov/.avi, zaproponuj pobranie jako mp3
+if ext in ['.mp3', '.wav', '.m4a']:
+    st.download_button('Pobierz audio', orig.read_bytes(), file_name=f'{uid}{ext}')
+else:
+    # Konwersja do mp3 na żądanie
+    mp3_path = orig.with_suffix('.mp3')
+    if not mp3_path.exists():
+        deps = check_dependencies()
+        if not deps['ffmpeg']['available']:
+            st.warning('FFmpeg nie jest dostępny – nie można przekonwertować do MP3.')
+        else:
+            ffmpeg_path = deps['ffmpeg']['path']
+            cmd = [ffmpeg_path, '-y', '-i', str(orig), str(mp3_path)]
+            try:
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            except Exception as e:
+                st.warning(f'Błąd konwersji do MP3: {e}')
+    if mp3_path.exists():
+        st.download_button('Pobierz audio (MP3)', mp3_path.read_bytes(), file_name=f'{uid}.mp3')
+    else:
+        st.download_button('Pobierz audio (oryginał)', orig.read_bytes(), file_name=f'{uid}{ext}')
+
+# --- Stan sesji ---
+done_key = f"done_{uid}"
+topic_key = f"topic_{uid}"
+sum_key = f"summary_{uid}"
+for key, default in [(done_key, False), (topic_key, ''), (sum_key, '')]:
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+# --- Transkrypcja ---
+transcript_exists = tr.exists() and tr.stat().st_size > 0
+if st.button('Transkrybuj') and not st.session_state[done_key]:
+    # dzielenie i transkrypcja
+    chunks = split_audio(orig)
+    text = transcribe_chunks(chunks, client)
+    encoding = get_safe_encoding()
+    tr.write_text(text, encoding=encoding)
+    st.session_state[done_key] = True
+    st.session_state[topic_key] = ''
+    st.session_state[sum_key] = ''
+    # NIE używaj st.experimental_rerun() - po prostu UI przejdzie dalej w kolejnym renderze
+
+# --- UI po transkrypcji ---
+if st.session_state[done_key] or transcript_exists:
+    encoding = get_safe_encoding()
+    transcript = tr.read_text(encoding=encoding) if tr.exists() else ''
+    st.subheader('Transkrypt:')
+    st.text_area('Transkrypcja', transcript, height=300)
+    # Najpierw przycisk pobierania transkryptu
+    st.download_button('Pobierz transkrypt', transcript, file_name=f'{uid}_transkrypt.txt')
+    # Następnie przycisk podsumowania
+    if st.button('Podsumuj'):
+        topic, summary = summarize(transcript, client)
+        st.session_state[topic_key] = topic
+        st.session_state[sum_key] = summary
+    # Wyświetl podsumowanie jeśli istnieje
+    if st.session_state[topic_key] or st.session_state[sum_key]:
+        st.subheader('Temat:')
+        st.write(st.session_state[topic_key])
+        st.subheader('Podsumowanie:')
+        st.write(st.session_state[sum_key])
+        # Przycisk pobierania podsumowania
+        st.download_button('Pobierz podsumowanie', st.session_state[sum_key], file_name=f'{uid}_podsumowanie.txt')

@@ -23,6 +23,8 @@ Aplikacja webowa stworzona przy użyciu Streamlit, która umożliwia transkrypcj
 - ✅ **Czyszczenie transkrypcji** - usuwanie artefaktów mowy (um, uh, em, itp.)
 - ✅ **Podział długich plików** - automatyczny podział na 5-minutowe segmenty
 - ✅ **Eksport wyników** - pobieranie transkrypcji i podsumowań jako pliki tekstowe
+- ✅ **Inteligentna konwersja audio** - automatyczne przekształcanie plików video (MP4, WEBM, MOV, AVI) do MP3 podczas pobierania
+- ✅ **Ulepszony UI** - przycisk pobierania audio umieszczony bezpośrednio pod odtwarzaczem dla lepszego UX
 - ✅ **Cache'owanie** - optymalizacja wydajności dzięki Streamlit cache
 - ✅ **Wielojęzyczność** - domyślnie polski, z możliwością rozszerzenia
 - 🌍 **Cross-Platform** - pełna kompatybilność z Windows, macOS i Linux
@@ -188,6 +190,8 @@ Aplikacja będzie dostępna pod adresem: `http://localhost:8501`
 - Transkrypcja pojawi się w edytowalnym polu tekstowym
 - Możesz ręcznie poprawić tekst przed podsumowaniem
 - Kliknij "Pobierz transkrypt" aby zapisać plik .txt
+- **Pobieranie audio**: Dla plików video (MP4, WEBM, MOV, AVI) dostępne jest automatyczne pobieranie w formacie MP3
+- **Pobieranie audio**: Dla plików audio (MP3, WAV, M4A) dostępne jest pobieranie w oryginalnym formacie
 
 ### 5. Podsumowanie
 - Kliknij "Podsumuj" aby wygenerować temat i podsumowanie
