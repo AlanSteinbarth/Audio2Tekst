@@ -150,11 +150,7 @@ with st.expander("ℹ️ Informacje o systemie", expanded=False):
     
     st.write("---")
     st.write("**📋 Przetwarzanie długich tekstów:**")
-    st.write("• W przypadku bardzo długich transkrypcji (>8000 znaków)")
-    st.write("• Tekst jest automatycznie dzielony na fragmenty")
-    st.write("• Każdy fragment jest podsumowywany osobno")
-    st.write("• Na końcu generowane jest finalne podsumowanie całości")
-    st.write("• Rozwiązuje to ograniczenia OpenAI związane z długością promptu")
+    st.write("W przypadku bardzo długich transkrypcji (>8000 znaków) tekst jest automatycznie dzielony na fragmenty. Każdy fragment jest podsumowywany osobno a na końcu generowane jest finalne podsumowanie całości. Rozwiązuje to ograniczenia OpenAI związane z długością promptu.")
 
 # Sprawdź czy wszystkie zależności są dostępne
 missing_deps = [name for name, info in dependencies.items() if not info['available']]
