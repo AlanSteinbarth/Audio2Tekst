@@ -491,12 +491,7 @@ data, ext = None, None
 error_message = None
 
 if src == 'YouTube':
-    st.sidebar.markdown("### 📺 YouTube")
-    st.sidebar.markdown("Wklej pełny adres filmu YouTube:")
-    st.sidebar.markdown("**Przykłady poprawnych linków:**")
-    st.sidebar.markdown("- `https://www.youtube.com/watch?v=ABC123`")
-    st.sidebar.markdown("- `https://youtu.be/ABC123`")
-    url = st.sidebar.text_input('Wklej adres www z YouTube:', placeholder="https://www.youtube.com/watch?v=...")
+    url = st.sidebar.text_input('Wklej adres www z YouTube:')
     if url:
         try:
             with st.spinner("Pobieranie audio z YouTube..."):
@@ -518,8 +513,6 @@ if src == 'YouTube':
     else:
         st.stop()
 else:
-    st.sidebar.markdown("### 📁 Plik lokalny")
-    st.sidebar.markdown("Wybierz plik audio lub video z komputera")
     up = st.sidebar.file_uploader('Wybierz plik', type=[e.strip('.') for e in ALLOWED_EXT])
     if up:
         data, ext = up.read(), Path(secure_filename(up.name)).suffix.lower()
