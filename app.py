@@ -194,9 +194,27 @@ def init_paths(data: bytes, ext: str):
         orig.write_bytes(data)
     return uid, orig, tr, sm
 
+def validate_youtube_url(url: str) -> bool:
+    """Sprawdza czy URL jest prawidłowym adresem YouTube."""
+    import re
+    youtube_patterns = [
+        r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtu\.be/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/embed/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/v/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/shorts/[\w-]+',
+        r'(?:https?://)?(?:m\.)?youtube\.com/watch\?v=[\w-]+'
+    ]
+    
+    return any(re.match(pattern, url.strip()) for pattern in youtube_patterns)
+
 @st.cache_data
 def download_youtube_audio(url: str):
     """Pobiera audio z filmu YouTube i konwertuje do odpowiedniego formatu."""
+    # Walidacja URL przed próbą pobrania
+    if not validate_youtube_url(url):
+        raise ValueError("Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube.")
+    
     tmpdir = tempfile.mkdtemp(prefix='audio2tekst_yt_')
     
     try:
@@ -224,9 +242,26 @@ def download_youtube_audio(url: str):
         
         raise FileNotFoundError("Nie znaleziono pliku audio z YouTube")
     
+    except ValueError as e:
+        # Błędy walidacji URL - przekaż dalej bez modyfikacji
+        raise e
     except Exception as e:
-        logger.error(f"Błąd podczas pobierania z YouTube: {str(e)}")
-        raise RuntimeError(f"Nie udało się pobrać audio z YouTube: {str(e)}")
+        error_msg = str(e).lower()
+        
+        # Obsługa specyficznych błędów yt-dlp
+        if "is not a valid url" in error_msg or "invalid url" in error_msg:
+            raise ValueError("Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube.")
+        elif "video unavailable" in error_msg or "private video" in error_msg:
+            raise RuntimeError("Film jest niedostępny lub prywatny. Spróbuj inny film YouTube.")
+        elif "sign in" in error_msg or "age restricted" in error_msg:
+            raise RuntimeError("Film wymaga logowania lub jest ograniczony wiekowo. Spróbuj inny film YouTube.")
+        elif "copyright" in error_msg or "blocked" in error_msg:
+            raise RuntimeError("Film jest zablokowany lub ma ograniczenia autorskie. Spróbuj inny film YouTube.")
+        elif "network" in error_msg or "connection" in error_msg:
+            raise RuntimeError("Błąd połączenia z YouTube. Sprawdź połączenie internetowe i spróbuj ponownie.")
+        else:
+            logger.error(f"Błąd podczas pobierania z YouTube: {str(e)}")
+            raise RuntimeError("Wystąpił błąd podczas pobierania z YouTube. Sprawdź link i spróbuj ponownie.")
     
     finally:
         # Bezpieczne usunięcie tymczasowego katalogu
@@ -450,12 +485,50 @@ def summarize(text: str, _client):
 
 # --- Interfejs użytkownika ---
 src = st.sidebar.radio('Wybierz źródło audio:', ['Plik lokalny', 'YouTube'])
+
+# Inicjalizacja zmiennych
+data, ext = None, None
+error_message = None
+
 if src == 'YouTube':
-    url = st.sidebar.text_input('Wklej adres www z YouTube:') or st.stop()
-    data, ext = download_youtube_audio(url)
+    st.sidebar.markdown("### 📺 YouTube")
+    st.sidebar.markdown("Wklej pełny adres filmu YouTube:")
+    st.sidebar.markdown("**Przykłady poprawnych linków:**")
+    st.sidebar.markdown("- `https://www.youtube.com/watch?v=ABC123`")
+    st.sidebar.markdown("- `https://youtu.be/ABC123`")
+    url = st.sidebar.text_input('Wklej adres www z YouTube:', placeholder="https://www.youtube.com/watch?v=...")
+    if url:
+        try:
+            with st.spinner("Pobieranie audio z YouTube..."):
+                data, ext = download_youtube_audio(url)
+                st.success("Pomyślnie pobrano audio z YouTube!")
+        except ValueError as e:
+            # Błędy walidacji URL - wyświetl jako ostrzeżenie
+            st.warning(f"⚠️ {str(e)}")
+            st.stop()
+        except RuntimeError as e:
+            # Inne błędy - wyświetl jako błąd
+            st.error(f"❌ {str(e)}")
+            st.stop()
+        except Exception as e:
+            # Nieoczekiwane błędy
+            st.error(f"❌ Wystąpił nieoczekiwany błąd: {str(e)}")
+            logger.error(f"Nieoczekiwany błąd podczas pobierania z YouTube: {str(e)}")
+            st.stop()
+    else:
+        st.stop()
 else:
-    up = st.sidebar.file_uploader('Wybierz plik', type=[e.strip('.') for e in ALLOWED_EXT]) or st.stop()
-    data, ext = up.read(), Path(secure_filename(up.name)).suffix.lower()
+    st.sidebar.markdown("### 📁 Plik lokalny")
+    st.sidebar.markdown("Wybierz plik audio lub video z komputera")
+    up = st.sidebar.file_uploader('Wybierz plik', type=[e.strip('.') for e in ALLOWED_EXT])
+    if up:
+        data, ext = up.read(), Path(secure_filename(up.name)).suffix.lower()
+    else:
+        st.stop()
+
+# Sprawdź czy mamy dane do przetworzenia
+if data is None:
+    st.stop()
 
 # --- Przetwarzanie pliku ---
 uid, orig, tr, sm = init_paths(data, ext)
