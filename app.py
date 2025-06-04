@@ -434,10 +434,14 @@ def summarize(text: str, _client):
                         return "Błąd podczas podsumowywania fragmentu", str(e)
             
             logger.info(f"Zebrałem {len(partial_summaries)} częściowych podsumowań")
+            if not partial_summaries:
+                st.error("Nie udało się wygenerować żadnego podsumowania fragmentów. Spróbuj ponownie lub sprawdź logi.")
+                logger.error("Brak partial_summaries - nie można wygenerować końcowego podsumowania.")
+                return "Nie udało się wygenerować podsumowania", "Brak podsumowań fragmentów."
             with st.spinner("Tworzenie końcowego podsumowania..."):
                 try:
                     final_prompt = "Oto podsumowania fragmentów długiego tekstu. Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n" + "\n".join(partial_summaries)
-                    logger.info("Wysyłam zapytanie o końcowe podsumowanie")
+                    logger.info(f"Prompt do modelu (final): {final_prompt[:200]}...")
                     completion = _client.chat.completions.create(
                         model='gpt-3.5-turbo',
                         messages=[{'role': 'user', 'content': final_prompt}],
@@ -445,13 +449,14 @@ def summarize(text: str, _client):
                     )
                     if completion and completion.choices and completion.choices[0].message:
                         content = completion.choices[0].message.content
-                        logger.info(f"Otrzymano końcowe podsumowanie: {content[:100]}...")
+                        logger.info(f"Odpowiedź modelu (final): {content[:200]}...")
                         lines = content.splitlines() if content else []
                         topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
                         summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
                         logger.info(f"Zwracam: topic='{topic[:50]}...', summary='{summary[:50]}...'")
                         return topic, summary
                     else:
+                        logger.error("Brak odpowiedzi z modelu OpenAI (final)")
                         raise Exception("Brak odpowiedzi z modelu OpenAI (final)")
                 except Exception as e:
                     msg = f"Błąd końcowego podsumowania: {e}\n"
@@ -504,88 +509,31 @@ src = st.sidebar.radio('Wybierz źródło audio:', ['Plik lokalny', 'YouTube'])
 data, ext = None, None
 error_message = None
 
+# Flaga do komunikatu o pobraniu audio z YouTube
+if 'yt_success' not in st.session_state:
+    st.session_state['yt_success'] = False
+
 if src == 'YouTube':
     url = st.sidebar.text_input('Wklej adres www z YouTube:')
     if url:
         try:
             with st.spinner("Pobieranie audio z YouTube..."):
                 data, ext = download_youtube_audio(url)
-                st.success("Pomyślnie pobrano audio z YouTube!")
+                st.session_state['yt_success'] = True
         except ValueError as e:
-            # Błędy walidacji URL - wyświetl jako ostrzeżenie
             st.warning(f"⚠️ {str(e)}")
+            st.session_state['yt_success'] = False
             st.stop()
         except RuntimeError as e:
-            # Inne błędy - wyświetl jako błąd
             st.error(f"❌ {str(e)}")
+            st.session_state['yt_success'] = False
             st.stop()
         except Exception as e:
-            # Nieoczekiwane błędy
             st.error(f"❌ Wystąpił nieoczekiwany błąd: {str(e)}")
             logger.error(f"Nieoczekiwany błąd podczas pobierania z YouTube: {str(e)}")
+            st.session_state['yt_success'] = False
             st.stop()
+        if st.session_state['yt_success']:
+            st.success("Pomyślnie pobrano audio z YouTube!")
     else:
-        st.stop()
-else:
-    up = st.sidebar.file_uploader('Wybierz plik', type=[e.strip('.') for e in ALLOWED_EXT])
-    if up:
-        data, ext = up.read(), Path(secure_filename(up.name)).suffix.lower()
-    else:
-        st.stop()
-
-# Sprawdź czy mamy dane do przetworzenia
-if data is None:
-    st.stop()
-
-# --- Przetwarzanie pliku ---
-uid, orig, tr, sm = init_paths(data, ext)
-st.audio(orig.read_bytes(), format=ext.lstrip('.'))
-
-# --- Stan sesji ---
-done_key = f"done_{uid}"
-topic_key = f"topic_{uid}"
-sum_key = f"summary_{uid}"
-for key, default in [(done_key, False), (topic_key, ''), (sum_key, '')]:
-    if key not in st.session_state:
-        st.session_state[key] = default
-
-# --- Transkrypcja ---
-if st.button('Transkrybuj') and not st.session_state[done_key]:
-    # dzielenie i transkrypcja
-    chunks = split_audio(orig)
-    text = transcribe_chunks(chunks, client)
-    encoding = get_safe_encoding()
-    tr.write_text(text, encoding=encoding)
-    st.session_state[done_key] = True
-
-# --- Wyświetlanie wyników ---
-if st.session_state[done_key]:
-    encoding = get_safe_encoding()
-    transcript = tr.read_text(encoding=encoding)
-    st.text_area('Transkrypt (możesz edytować tekst i później go zapisać)', transcript, height=300)
-    st.download_button('Pobierz transkrypt', transcript, file_name=tr.name)
-      # Generowanie podsumowania
-    if st.button('Podsumuj'):
-        if not st.session_state[topic_key]:  # Tylko jeśli jeszcze nie ma podsumowania
-            try:
-                t, s = summarize(transcript, client)
-                if t and s:  # Sprawdź czy otrzymano poprawne wyniki
-                    sm.write_text(f"{t}\n\n{s}", encoding=encoding)
-                    st.session_state[topic_key] = t
-                    st.session_state[sum_key] = s
-                    st.success("Podsumowanie zostało wygenerowane!")
-                else:
-                    st.error("Nie udało się wygenerować podsumowania. Spróbuj ponownie.")
-            except Exception as e:
-                st.error(f"Błąd podczas generowania podsumowania: {str(e)}")
-                logger.error(f"Błąd w głównej pętli podsumowania: {str(e)}")
-        else:
-            st.info("Podsumowanie zostało już wygenerowane!")
-
-# --- Wyświetlanie podsumowania ---
-if st.session_state[topic_key]:
-    st.subheader('Temat')
-    st.write(st.session_state[topic_key])
-    st.subheader('Podsumowanie')
-    st.write(st.session_state[sum_key])
-    st.download_button('Pobierz podsumowanie', f"{st.session_state[topic_key]}\n\n{st.session_state[sum_key]}", file_name=sm.name)
+        st.session_state['yt_success'] = False
