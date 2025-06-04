@@ -487,6 +487,11 @@ def summarize(text: str, _client):
                     st.error(f"Błąd podczas podsumowywania tekstu: {e}")
                     return "Błąd podczas podsumowywania tekstu", str(e)
     except Exception as e:
+        # Obsługa błędu braku środków/quota w OpenAI
+        if 'insufficient_quota' in str(e).lower() or 'you exceeded your current quota' in str(e).lower() or 'error code: 429' in str(e).lower():
+            st.error("Brak środków lub limitu na koncie OpenAI. Sprawdź swój plan i limity na https://platform.openai.com/account/billing.")
+            logger.error(f"Błąd quota (429/insufficient_quota): {e}")
+            return "Brak środków na koncie OpenAI", str(e)
         msg = f"Błąd ogólny podsumowania: {e}\n"
         logger.error(msg)
         with open(log_path, "a", encoding="utf-8") as f:
@@ -513,8 +518,39 @@ if 'yt_ext' not in st.session_state:
 
 if src == 'YouTube':
     url = st.sidebar.text_input('Wklej adres www z YouTube:')
+    # --- RESET STANU PO ZMIANIE URL ---
+    prev_url = st.session_state.get('yt_prev_url', None)
+    if url and url != prev_url:
+        # Usuń stare klucze sesji związane z poprzednią transkrypcją/podsumowaniem
+        keys_to_remove = []
+        for k in list(st.session_state.keys()):
+            if isinstance(k, str) and (
+                k.startswith('done_') or k.startswith('topic_') or k.startswith('summary_')
+                or k.startswith('yt_')
+            ):
+                keys_to_remove.append(k)
+        for k in keys_to_remove:
+            del st.session_state[k]
+        # Usuń pliki powiązane z poprzednim UID (jeśli istnieje)
+        prev_uid = st.session_state.get('yt_prev_uid', None)
+        if prev_uid:
+            for folder in (BASE_DIR / 'originals', BASE_DIR / 'transcripts', BASE_DIR / 'summaries'):
+                for ext in ('.mp3', '.wav', '.m4a', '.mp4', '.mov', '.avi', '.webm', '.txt'):
+                    f = folder / f"{prev_uid}{ext}"
+                    if f.exists():
+                        try:
+                            f.unlink()
+                        except Exception as e:
+                            logger.warning(f'Nie udało się usunąć pliku {f}: {e}')
+        # Resetuj flagi yt
+        st.session_state['yt_success'] = False
+        st.session_state['yt_data'] = None
+        st.session_state['yt_ext'] = None
+        st.session_state['yt_prev_uid'] = None
+        st.session_state['yt_prev_url'] = url
+    # --- KONIEC RESETU ---
     # Jeśli już pobrano audio, przypisz z sesji
-    if st.session_state['yt_success'] and st.session_state['yt_data'] and st.session_state['yt_ext']:
+    if st.session_state.get('yt_success') and st.session_state.get('yt_data') and st.session_state.get('yt_ext'):
         data = st.session_state['yt_data']
         ext = st.session_state['yt_ext']
         st.success("Pomyślnie pobrano audio z YouTube!")
@@ -522,9 +558,15 @@ if src == 'YouTube':
         try:
             with st.spinner("Pobieranie audio z YouTube..."):
                 data, ext = download_youtube_audio(url)
+                if not data or not isinstance(data, bytes):
+                    raise RuntimeError("Nie udało się pobrać pliku audio z YouTube lub plik jest uszkodzony.")
                 st.session_state['yt_success'] = True
                 st.session_state['yt_data'] = data
                 st.session_state['yt_ext'] = ext
+                # Zapisz UID do późniejszego czyszczenia
+                uid, _, _, _ = init_paths(data, ext)
+                st.session_state['yt_prev_uid'] = uid
+                st.session_state['yt_prev_url'] = url
                 st.success("Pomyślnie pobrano audio z YouTube!")
         except ValueError as e:
             st.warning(f"⚠️ {str(e)}")
