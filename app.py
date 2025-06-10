@@ -184,19 +184,18 @@ CHUNK_MS = 5 * 60 * 1000     # 5 minutes in ms
 # ✅ Zwiększona stabilność na różnych środowiskach
 
 @st.cache_data
-def init_paths(data: bytes, ext: str):
+def init_paths(file_data: bytes, file_ext: str):
     """Inicjalizuje ścieżki dla plików na podstawie zawartości."""
-    uid = hashlib.md5(data).hexdigest()
-    orig = BASE_DIR / "originals" / f"{uid}{ext}"
-    tr = BASE_DIR / "transcripts" / f"{uid}.txt"
-    sm = BASE_DIR / "summaries" / f"{uid}.txt"
-    if not orig.exists():
-        orig.write_bytes(data)
-    return uid, orig, tr, sm
+    file_uid = hashlib.md5(file_data, usedforsecurity=False).hexdigest()
+    orig_path = BASE_DIR / "originals" / f"{file_uid}{file_ext}"
+    transcript_path = BASE_DIR / "transcripts" / f"{file_uid}.txt"
+    summary_path = BASE_DIR / "summaries" / f"{file_uid}.txt"
+    if not orig_path.exists():
+        orig_path.write_bytes(file_data)
+    return file_uid, orig_path, transcript_path, summary_path
 
-def validate_youtube_url(url: str) -> bool:
+def validate_youtube_url(youtube_url: str) -> bool:
     """Sprawdza czy URL jest prawidłowym adresem YouTube."""
-    import re
     youtube_patterns = [
         r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+',
         r'(?:https?://)?(?:www\.)?youtu\.be/[\w-]+',
@@ -206,12 +205,12 @@ def validate_youtube_url(url: str) -> bool:
         r'(?:https?://)?(?:m\.)?youtube\.com/watch\?v=[\w-]+'
     ]
     
-    return any(re.match(pattern, url.strip()) for pattern in youtube_patterns)
+    return any(re.match(pattern, youtube_url.strip()) for pattern in youtube_patterns)
 
-def download_youtube_audio(url: str):
+def download_youtube_audio(youtube_url: str):
     """Pobiera audio z filmu YouTube i konwertuje do odpowiedniego formatu."""
     # Walidacja URL przed próbą pobrania
-    if not validate_youtube_url(url):
+    if not validate_youtube_url(youtube_url):
         raise ValueError("Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube.")
     
     tmpdir = tempfile.mkdtemp(prefix='audio2tekst_yt_')
@@ -231,84 +230,85 @@ def download_youtube_audio(url: str):
         }
         
         with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
+            ydl.download([youtube_url])
         
         # Znajdź pobrany plik
-        for f in Path(tmpdir).iterdir():
-            if f.suffix.lower() in ALLOWED_EXT and f.is_file():
-                data = f.read_bytes()
-                return data, f.suffix.lower()
+        for file_path in Path(tmpdir).iterdir():
+            if file_path.suffix.lower() in ALLOWED_EXT and file_path.is_file():
+                file_data = file_path.read_bytes()
+                return file_data, file_path.suffix.lower()
         
         raise FileNotFoundError("Nie znaleziono pliku audio z YouTube")
     
-    except ValueError as e:
+    except ValueError:
         # Błędy walidacji URL - przekaż dalej bez modyfikacji
-        raise e
-    except Exception as e:
-        error_msg = str(e).lower()
+        raise
+    except Exception as exc:
+        error_msg = str(exc).lower()
         
         # Obsługa specyficznych błędów yt-dlp
         if "is not a valid url" in error_msg or "invalid url" in error_msg:
-            raise ValueError("Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube.")
+            raise ValueError("Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube.") from exc
         elif "video unavailable" in error_msg or "private video" in error_msg:
-            raise RuntimeError("Film jest niedostępny lub prywatny. Spróbuj inny film YouTube.")
+            raise RuntimeError("Film jest niedostępny lub prywatny. Spróbuj inny film YouTube.") from exc
         elif "sign in" in error_msg or "age restricted" in error_msg:
-            raise RuntimeError("Film wymaga logowania lub jest ograniczony wiekowo. Spróbuj inny film YouTube.")
+            raise RuntimeError("Film wymaga logowania lub jest ograniczony wiekowo. Spróbuj inny film YouTube.") from exc
         elif "copyright" in error_msg or "blocked" in error_msg:
-            raise RuntimeError("Film jest zablokowany lub ma ograniczenia autorskie. Spróbuj inny film YouTube.")
+            raise RuntimeError("Film jest zablokowany lub ma ograniczenia autorskie. Spróbuj inny film YouTube.") from exc
         elif "network" in error_msg or "connection" in error_msg:
-            raise RuntimeError("Błąd połączenia z YouTube. Sprawdź połączenie internetowe i spróbuj ponownie.")
+            raise RuntimeError("Błąd połączenia z YouTube. Sprawdź połączenie internetowe i spróbuj ponownie.") from exc
         else:
-            logger.error(f"Błąd podczas pobierania z YouTube: {str(e)}")
-            raise RuntimeError("Wystąpił błąd podczas pobierania z YouTube. Sprawdź link i spróbuj ponownie.")
+            logger.error("Błąd podczas pobierania z YouTube: %s", str(exc))
+            raise RuntimeError("Wystąpił błąd podczas pobierania z YouTube. Sprawdź link i spróbuj ponownie.") from exc
     
     finally:
         # Bezpieczne usunięcie tymczasowego katalogu
         try:
             shutil.rmtree(tmpdir)
-        except Exception as e:
-            logger.warning(f"Nie udało się usunąć tymczasowego katalogu: {e}")
+        except Exception as cleanup_exc:
+            logger.warning("Nie udało się usunąć tymczasowego katalogu: %s", cleanup_exc)
 
 @st.cache_data
-def get_duration(path: Path) -> float:
+def get_duration(file_path: Path) -> float:
     """Zwraca długość pliku audio/video w sekundach."""
     # Sprawdź dostępność ffprobe
-    deps = check_dependencies()
-    if not deps['ffprobe']['available']:
+    dependencies_info = check_dependencies()
+    if not dependencies_info['ffprobe']['available']:
         raise RuntimeError("FFprobe nie jest dostępne w systemie. Zainstaluj FFmpeg.")
     
-    ffprobe_path = deps['ffprobe']['path']
-    cmd = [
+    ffprobe_path = dependencies_info['ffprobe']['path']
+    ffprobe_cmd = [
         ffprobe_path, '-v', 'error',
         '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1',
-        str(path)
+        str(file_path)
     ]
     
     try:
         result = subprocess.run(
-            cmd, 
+            ffprobe_cmd, 
             capture_output=True, 
             text=True, 
             timeout=30,  # timeout dla bezpieczeństwa
             check=True
         )
         return float(result.stdout.strip())
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Przekroczono czas oczekiwania na analizę pliku")
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Błąd podczas analizy pliku: {e}")
-    except ValueError as e:
-        raise RuntimeError(f"Nie można odczytać długości pliku: {e}")
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Przekroczono czas oczekiwania na analizę pliku") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"Błąd podczas analizy pliku: {exc}") from exc
+    except ValueError as exc:
+        raise RuntimeError(f"Nie można odczytać długości pliku: {exc}") from exc
 
 @st.cache_data
-def split_audio(path: Path):
-    """Dzieli długie pliki audio na mniejsze części do przetworzenia."""    # Sprawdź dostępność ffmpeg
-    deps = check_dependencies()
-    if not deps['ffmpeg']['available']:
+def split_audio(file_path: Path):
+    """Dzieli długie pliki audio na mniejsze części do przetworzenia."""    
+    # Sprawdź dostępność ffmpeg
+    dependencies_info = check_dependencies()
+    if not dependencies_info['ffmpeg']['available']:
         raise RuntimeError("FFmpeg nie jest dostępne w systemie. Zainstaluj FFmpeg.")
-    ffmpeg_path = deps['ffmpeg']['path']
-    duration = get_duration(path)
+    ffmpeg_exe_path = dependencies_info['ffmpeg']['path']
+    duration = get_duration(file_path)
     seg_sec = CHUNK_MS / 1000
     parts = []
     
@@ -317,19 +317,19 @@ def split_audio(path: Path):
         length = seg_sec if (start + seg_sec) <= duration else (duration - start)
         
         # Utwórz tymczasowy plik w sposób bezpieczny dla wszystkich platform
-        fd, tmp = tempfile.mkstemp(suffix=path.suffix, prefix='audio2tekst_')
+        fd, tmp = tempfile.mkstemp(suffix=file_path.suffix, prefix='audio2tekst_')
         os.close(fd)
         tmp_path = Path(tmp)
         
-        cmd = [
-            ffmpeg_path, '-y', '-i', str(path),
+        ffmpeg_cmd = [
+            ffmpeg_exe_path, '-y', '-i', str(file_path),
             '-ss', str(start), '-t', str(length),
             '-c', 'copy', str(tmp_path)
         ]
         
         try:
             subprocess.run(
-                cmd, 
+                ffmpeg_cmd, 
                 stdout=subprocess.DEVNULL, 
                 stderr=subprocess.PIPE,
                 timeout=300,  # 5 minut timeout
@@ -337,26 +337,26 @@ def split_audio(path: Path):
                 text=True
             )
             parts.append(tmp_path)
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
             if tmp_path.exists():
                 tmp_path.unlink()
-            raise RuntimeError(f"Przekroczono czas oczekiwania podczas dzielenia pliku (segment {i+1})")
-        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Przekroczono czas oczekiwania podczas dzielenia pliku (segment {i+1})") from exc
+        except subprocess.CalledProcessError as exc:
             if tmp_path.exists():
                 tmp_path.unlink()
-            logger.error(f"FFmpeg error: {e.stderr}")
-            raise RuntimeError(f"Błąd podczas dzielenia pliku (segment {i+1}): {e}")
+            logger.error("FFmpeg error: %s", exc.stderr)
+            raise RuntimeError(f"Błąd podczas dzielenia pliku (segment {i+1}): {exc}") from exc
     
     return parts
 
 @st.cache_data
-def clean_transcript(text: str) -> str:
+def clean_transcript(transcript_text: str) -> str:
     """Czyści transkrypcję z typowych artefaktów mowy."""
-    text = re.sub(r"\b(?:em|yhm|um|uh|a{2,}|y{2,})\b", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+    cleaned_text = re.sub(r"\b(?:em|yhm|um|uh|a{2,}|y{2,})\b", "", transcript_text, flags=re.IGNORECASE)
+    cleaned_text = re.sub(r"\s+", " ", cleaned_text)
+    return cleaned_text.strip()
 
-def transcribe_chunks(chunks, _client):
+def transcribe_chunks(audio_chunks, openai_client):
     """Transkrybuje podzielone fragmenty audio na tekst używając OpenAI API."""
     texts = []
     long_transcription_msg = "Plik audio poddawany transkrypcji jest bardzo duży. Potrzebuję więcej czasu. Cierpliwości..."
@@ -368,49 +368,54 @@ def transcribe_chunks(chunks, _client):
     thread = threading.Thread(target=delayed_info)
     thread.start()
     with st.spinner("Transkrypcja w toku..."):
-        for c in chunks:
+        for chunk_file in audio_chunks:
             try:
-                if c.stat().st_size <= MAX_SIZE:
-                    with open(c, 'rb') as f:
-                        res = _client.audio.transcriptions.create(
+                if chunk_file.stat().st_size <= MAX_SIZE:
+                    with open(chunk_file, 'rb') as audio_file:
+                        res = openai_client.audio.transcriptions.create(
                             model='whisper-1',
-                            file=f,
+                            file=audio_file,
                             language='pl',
                             response_format='text'
                         )
                         texts.append(clean_transcript(str(res)))
                 else:
-                    logger.warning(f"Plik {c} przekracza maksymalny rozmiar {MAX_SIZE} bajtów")
-            except Exception as e:
-                logger.error(f"Błąd podczas transkrypcji fragmentu {c}: {str(e)}")
+                    logger.warning("Plik %s przekracza maksymalny rozmiar %s bajtów", chunk_file, MAX_SIZE)
+            except Exception as exc:
+                logger.error("Błąd podczas transkrypcji fragmentu %s: %s", chunk_file, str(exc))
             finally:
                 # Bezpieczne usunięcie pliku tymczasowego
                 try:
-                    if c.exists():
-                        c.unlink()
-                except Exception as e:
-                    logger.warning(f"Nie udało się usunąć pliku tymczasowego {c}: {e}")
+                    if chunk_file.exists():
+                        chunk_file.unlink()
+                except Exception as cleanup_exc:
+                    logger.warning("Nie udało się usunąć pliku tymczasowego %s: %s", chunk_file, cleanup_exc)
     return "\n".join(texts)
 
-def summarize(text: str, _client):
+def summarize(input_text: str, openai_client):
     """Generuje temat i podsumowanie z transkrypcji, dzieląc długi tekst na fragmenty."""
     log_path = Path("logs/summary_errors.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     # Usunięto komunikat o długim tekście
-    logger.info(f"Rozpoczynam summarize() - długość tekstu: {len(text)} znaków")
+    logger.info("Rozpoczynam summarize() - długość tekstu: %s znaków", len(input_text))
+    
+    class OpenAIAPIError(Exception):
+        """Własny wyjątek dla błędów OpenAI API."""
+        pass
+    
     try:
         MAX_CHUNK = 8000  # znaków na fragment (bezpieczny limit)
-        if len(text) > MAX_CHUNK:
+        if len(input_text) > MAX_CHUNK:
             logger.info("Tekst jest długi - dzielę na fragmenty")
-            chunks = [text[i:i+MAX_CHUNK] for i in range(0, len(text), MAX_CHUNK)]
-            logger.info(f"Podzielono na {len(chunks)} fragmentów")
+            text_chunks = [input_text[i:i+MAX_CHUNK] for i in range(0, len(input_text), MAX_CHUNK)]
+            logger.info("Podzielono na %s fragmentów", len(text_chunks))
             partial_summaries = []
-            for idx, chunk in enumerate(chunks):
-                logger.info(f"Przetwarzam fragment {idx+1}/{len(chunks)}")
-                with st.spinner(f"Podsumowywanie fragmentu {idx+1}/{len(chunks)}..."):
+            for idx, chunk in enumerate(text_chunks):
+                logger.info("Przetwarzam fragment %s/%s", idx+1, len(text_chunks))
+                with st.spinner(f"Podsumowywanie fragmentu {idx+1}/{len(text_chunks)}..."):
                     try:
-                        prompt = f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami (fragment {idx+1}/{len(chunks)}):\n" + chunk
-                        completion = _client.chat.completions.create(
+                        prompt = f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami (fragment {idx+1}/{len(text_chunks)}):\n" + chunk
+                        completion = openai_client.chat.completions.create(
                             model='gpt-3.5-turbo',
                             messages=[{'role': 'user', 'content': prompt}],
                             max_tokens=300
@@ -419,15 +424,15 @@ def summarize(text: str, _client):
                             content = completion.choices[0].message.content
                             partial_summaries.append(content)
                         else:
-                            raise Exception("Brak odpowiedzi z modelu OpenAI")
-                    except Exception as e:
-                        msg = f"Błąd fragmentu {idx+1}: {e}\n"
+                            raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI")
+                    except Exception as exc:
+                        msg = f"Błąd fragmentu {idx+1}: {exc}\n"
                         logger.error(msg)
-                        with open(log_path, "a", encoding="utf-8") as f:
-                            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-                        st.error(f"Błąd podczas podsumowywania fragmentu {idx+1}: {e}")
-                        return "Błąd podczas podsumowywania fragmentu", str(e)
-            logger.info(f"Zebrałem {len(partial_summaries)} częściowych podsumowań")
+                        with open(log_path, "a", encoding="utf-8") as log_file:
+                            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                        st.error(f"Błąd podczas podsumowywania fragmentu {idx+1}: {exc}")
+                        return "Błąd podczas podsumowywania fragmentu", str(exc)
+            logger.info("Zebrałem %s częściowych podsumowań", len(partial_summaries))
             if not partial_summaries:
                 st.error("Nie udało się wygenerować żadnego podsumowania fragmentów. Spróbuj ponownie lub sprawdź logi.")
                 logger.error("Brak partial_summaries - nie można wygenerować końcowego podsumowania.")
@@ -435,69 +440,69 @@ def summarize(text: str, _client):
             with st.spinner("Tworzenie końcowego podsumowania..."):
                 try:
                     final_prompt = "Oto podsumowania fragmentów długiego tekstu. Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n" + "\n".join(partial_summaries)
-                    logger.info(f"Prompt do modelu (final): {final_prompt[:200]}...")
-                    completion = _client.chat.completions.create(
+                    logger.info("Prompt do modelu (final): %s...", final_prompt[:200])
+                    completion = openai_client.chat.completions.create(
                         model='gpt-3.5-turbo',
                         messages=[{'role': 'user', 'content': final_prompt}],
                         max_tokens=300
                     )
                     if completion and completion.choices and completion.choices[0].message:
                         content = completion.choices[0].message.content
-                        logger.info(f"Odpowiedź modelu (final): {content[:200]}...")
+                        logger.info("Odpowiedź modelu (final): %s...", content[:200])
                         lines = content.splitlines() if content else []
-                        topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
-                        summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
-                        logger.info(f"Zwracam: topic='{topic[:50]}...', summary='{summary[:50]}...'")
-                        return topic, summary
+                        final_topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
+                        final_summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
+                        logger.info("Zwracam: topic='%s...', summary='%s...'", final_topic[:50], final_summary[:50])
+                        return final_topic, final_summary
                     else:
                         logger.error("Brak odpowiedzi z modelu OpenAI (final)")
-                        raise Exception("Brak odpowiedzi z modelu OpenAI (final)")
-                except Exception as e:
-                    msg = f"Błąd końcowego podsumowania: {e}\n"
+                        raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (final)")
+                except Exception as exc:
+                    msg = f"Błąd końcowego podsumowania: {exc}\n"
                     logger.error(msg)
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-                    st.error(f"Błąd podczas generowania końcowego podsumowania: {e}")
-                    return "Błąd podczas generowania końcowego podsumowania", str(e)
+                    with open(log_path, "a", encoding="utf-8") as log_file:
+                        log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                    st.error(f"Błąd podczas generowania końcowego podsumowania: {exc}")
+                    return "Błąd podczas generowania końcowego podsumowania", str(exc)
         else:
             logger.info("Tekst jest krótki - bezpośrednie podsumowanie")
             with st.spinner("Podsumowywanie tekstu..."):
                 try:
-                    prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + text
-                    completion = _client.chat.completions.create(
+                    prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + input_text
+                    completion = openai_client.chat.completions.create(
                         model='gpt-3.5-turbo',
                         messages=[{'role': 'user', 'content': prompt}],
                         max_tokens=300
                     )
                     if completion and completion.choices and completion.choices[0].message:
                         content = completion.choices[0].message.content
-                        logger.info(f"Otrzymano krótkie podsumowanie: {content[:100]}...")
+                        logger.info("Otrzymano krótkie podsumowanie: %s...", content[:100])
                         lines = content.splitlines() if content else []
-                        topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
-                        summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
-                        logger.info(f"Zwracam: topic='{topic[:50]}...', summary='{summary[:50]}...'")
-                        return topic, summary
+                        short_topic = lines[0] if lines else 'Nie udało się wygenerować tematu'
+                        short_summary = ' '.join(lines[1:]) if len(lines) > 1 else 'Nie udało się wygenerować podsumowania'
+                        logger.info("Zwracam: topic='%s...', summary='%s...'", short_topic[:50], short_summary[:50])
+                        return short_topic, short_summary
                     else:
-                        raise Exception("Brak odpowiedzi z modelu OpenAI (krótki tekst)")
-                except Exception as e:
-                    msg = f"Błąd podsumowania krótkiego tekstu: {e}\n"
+                        raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (krótki tekst)")
+                except Exception as exc:
+                    msg = f"Błąd podsumowania krótkiego tekstu: {exc}\n"
                     logger.error(msg)
-                    with open(log_path, "a", encoding="utf-8") as f:
-                        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-                    st.error(f"Błąd podczas podsumowywania tekstu: {e}")
-                    return "Błąd podczas podsumowywania tekstu", str(e)
-    except Exception as e:
+                    with open(log_path, "a", encoding="utf-8") as log_file:
+                        log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                    st.error(f"Błąd podczas podsumowywania tekstu: {exc}")
+                    return "Błąd podczas podsumowywania tekstu", str(exc)
+    except Exception as exc:
         # Obsługa błędu braku środków/quota w OpenAI
-        if 'insufficient_quota' in str(e).lower() or 'you exceeded your current quota' in str(e).lower() or 'error code: 429' in str(e).lower():
+        if 'insufficient_quota' in str(exc).lower() or 'you exceeded your current quota' in str(exc).lower() or 'error code: 429' in str(exc).lower():
             st.error("Brak środków lub limitu na koncie OpenAI. Sprawdź swój plan i limity na https://platform.openai.com/account/billing.")
-            logger.error(f"Błąd quota (429/insufficient_quota): {e}")
-            return "Brak środków na koncie OpenAI", str(e)
-        msg = f"Błąd ogólny podsumowania: {e}\n"
+            logger.error("Błąd quota (429/insufficient_quota): %s", exc)
+            return "Brak środków na koncie OpenAI", str(exc)
+        msg = f"Błąd ogólny podsumowania: {exc}\n"
         logger.error(msg)
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-        st.error(f"Błąd ogólny podczas podsumowywania: {e}")
-        return "Błąd ogólny podczas podsumowywania", str(e)
+        with open(log_path, "a", encoding="utf-8") as log_file:
+            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+        st.error(f"Błąd ogólny podczas podsumowywania: {exc}")
+        return "Błąd ogólny podczas podsumowywania", str(exc)
     
     return "Nie udało się wygenerować podsumowania", "Spróbuj ponownie lub skontaktuj się z administratorem"
 
@@ -530,18 +535,17 @@ if src == 'YouTube':
             ):
                 keys_to_remove.append(k)
         for k in keys_to_remove:
-            del st.session_state[k]
-        # Usuń pliki powiązane z poprzednim UID (jeśli istnieje)
+            del st.session_state[k]        # Usuń pliki powiązane z poprzednim UID (jeśli istnieje)
         prev_uid = st.session_state.get('yt_prev_uid', None)
         if prev_uid:
             for folder in (BASE_DIR / 'originals', BASE_DIR / 'transcripts', BASE_DIR / 'summaries'):
-                for ext in ('.mp3', '.wav', '.m4a', '.mp4', '.mov', '.avi', '.webm', '.txt'):
-                    f = folder / f"{prev_uid}{ext}"
-                    if f.exists():
+                for file_ext in ('.mp3', '.wav', '.m4a', '.mp4', '.mov', '.avi', '.webm', '.txt'):
+                    file_to_remove = folder / f"{prev_uid}{file_ext}"
+                    if file_to_remove.exists():
                         try:
-                            f.unlink()
-                        except Exception as e:
-                            logger.warning(f'Nie udało się usunąć pliku {f}: {e}')
+                            file_to_remove.unlink()
+                        except Exception as cleanup_exc:
+                            logger.warning('Nie udało się usunąć pliku %s: %s', file_to_remove, cleanup_exc)
         # Resetuj flagi yt
         st.session_state['yt_success'] = False
         st.session_state['yt_data'] = None
@@ -562,8 +566,7 @@ if src == 'YouTube':
                     raise RuntimeError("Nie udało się pobrać pliku audio z YouTube lub plik jest uszkodzony.")
                 st.session_state['yt_success'] = True
                 st.session_state['yt_data'] = data
-                st.session_state['yt_ext'] = ext
-                # Zapisz UID do późniejszego czyszczenia
+                st.session_state['yt_ext'] = ext                # Zapisz UID do późniejszego czyszczenia
                 uid, _, _, _ = init_paths(data, ext)
                 st.session_state['yt_prev_uid'] = uid
                 st.session_state['yt_prev_url'] = url
@@ -617,16 +620,16 @@ else:
     # Konwersja do mp3 na żądanie
     mp3_path = orig.with_suffix('.mp3')
     if not mp3_path.exists():
-        deps = check_dependencies()
-        if not deps['ffmpeg']['available']:
+        dependencies_info = check_dependencies()
+        if not dependencies_info['ffmpeg']['available']:
             st.warning('FFmpeg nie jest dostępny – nie można przekonwertować do MP3.')
         else:
-            ffmpeg_path = deps['ffmpeg']['path']
-            cmd = [ffmpeg_path, '-y', '-i', str(orig), str(mp3_path)]
+            ffmpeg_exe_path = dependencies_info['ffmpeg']['path']
+            ffmpeg_cmd = [ffmpeg_exe_path, '-y', '-i', str(orig), str(mp3_path)]
             try:
-                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            except Exception as e:
-                st.warning(f'Błąd konwersji do MP3: {e}')
+                subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            except Exception as conversion_exc:
+                st.warning(f'Błąd konwersji do MP3: {conversion_exc}')
     if mp3_path.exists():
         st.download_button('Pobierz audio (MP3)', mp3_path.read_bytes(), file_name=f'{uid}.mp3')
     else:
@@ -644,10 +647,10 @@ for key, default in [(done_key, False), (topic_key, ''), (sum_key, '')]:
 transcript_exists = tr.exists() and tr.stat().st_size > 0
 if st.button('Transkrybuj') and not st.session_state[done_key]:
     # dzielenie i transkrypcja
-    chunks = split_audio(orig)
-    text = transcribe_chunks(chunks, client)
+    audio_chunks = split_audio(orig)
+    transcription_text = transcribe_chunks(audio_chunks, client)
     encoding = get_safe_encoding()
-    tr.write_text(text, encoding=encoding)
+    tr.write_text(transcription_text, encoding=encoding)
     st.session_state[done_key] = True
     st.session_state[topic_key] = ''
     st.session_state[sum_key] = ''
@@ -663,9 +666,9 @@ if st.session_state[done_key] or transcript_exists:
     st.download_button('Pobierz transkrypt', transcript, file_name=f'{uid}_transkrypt.txt')
     # Następnie przycisk podsumowania
     if st.button('Podsumuj'):
-        topic, summary = summarize(transcript, client)
-        st.session_state[topic_key] = topic
-        st.session_state[sum_key] = summary
+        result_topic, result_summary = summarize(transcript, client)
+        st.session_state[topic_key] = result_topic
+        st.session_state[sum_key] = result_summary
     # Wyświetl podsumowanie jeśli istnieje
     if st.session_state[topic_key] or st.session_state[sum_key]:
         st.subheader('Temat:')
