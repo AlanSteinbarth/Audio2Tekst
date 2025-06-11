@@ -43,23 +43,23 @@ import hashlib  # Do generowania unikalnych identyfikatorów plików
 import logging  # Do logowania zdarzeń i błędów
 import math  # Do obliczeń matematycznych (np. dzielenie na fragmenty)
 import os  # Do obsługi zmiennych środowiskowych
+from pathlib import Path  # Do obsługi ścieżek plików
 import platform  # Do wykrywania systemu operacyjnego
 import re  # Do operacji na wyrażeniach regularnych
 import shutil  # Do operacji na plikach i katalogach
-import subprocess  # nosec B404 # Bezpieczne wywoływanie FFmpeg
+import subprocess  # Do wywołań procesów zewnętrznych (ffmpeg, ffprobe)
 import tempfile  # Do obsługi plików tymczasowych
 import threading  # Do obsługi wątków (np. komunikaty o długich operacjach)
 import time  # Do operacji na czasie
-from pathlib import Path  # Do obsługi ścieżek plików
 from typing import Optional  # Typowanie opcjonalne
 
+from dotenv import load_dotenv  # Ładowanie zmiennych środowiskowych z pliku .env
 import openai  # Klient OpenAI do transkrypcji i podsumowań
 
 # --- Importy zewnętrzne ---
 import streamlit as st  # Framework do budowy interfejsu webowego
-import yt_dlp  # Narzędzie do pobierania audio z YouTube
-from dotenv import load_dotenv  # Ładowanie zmiennych środowiskowych z pliku .env
 from werkzeug.utils import secure_filename  # Bezpieczne operacje na nazwach plików
+import yt_dlp  # Narzędzie do pobierania audio z YouTube
 
 # --- Konfiguracja logowania ---
 # Ustawiamy poziom logowania na INFO i tworzymy loggera

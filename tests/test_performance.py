@@ -5,9 +5,9 @@ Audio2Tekst - Performance Tests
 Testy wydajności i obciążenia dla aplikacji Audio2Tekst.
 """
 
+from pathlib import Path
 import tempfile
 import time
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 import psutil

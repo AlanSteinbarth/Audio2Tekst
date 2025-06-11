@@ -2,8 +2,8 @@
 # Audio2Tekst - Test Configuration
 # =============================================================================
 
-import tempfile
 from pathlib import Path
+import tempfile
 
 import pytest
 
