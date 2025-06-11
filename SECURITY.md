@@ -185,3 +185,14 @@ Dziękujemy wszystkim, którzy odpowiedzialnie zgłaszają problemy bezpieczeńs
 ---
 
 *"Security is not a product, but a process." - Bruce Schneier*
+
+## Znane podatności w zależnościach (stan na 2025-06-11)
+
+Projekt korzysta z najnowszych dostępnych wersji bibliotek yt-dlp oraz setuptools, jednak narzędzie Safety wykrywa dla nich następujące podatności:
+
+- **yt-dlp (<2025.03.25)** – podatność na deserializację nieznanych danych (PVE-2025-76115). [Więcej informacji](https://data.safetycli.com/v/76115/97c)
+- **setuptools (<78.1.1)** – podatność na path traversal (CVE-2025-47273). [Więcej informacji](https://data.safetycli.com/v/76752/97c)
+
+Obecnie nie są dostępne nowsze, bezpieczne wersje tych bibliotek na PyPI. Zespół monitoruje sytuację i zaktualizuje zależności, gdy tylko pojawią się poprawki bezpieczeństwa.
+
+Zalecane jest regularne uruchamianie skanów bezpieczeństwa oraz śledzenie nowych wydań tych pakietów.
