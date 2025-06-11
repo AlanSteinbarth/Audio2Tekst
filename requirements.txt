@@ -16,4 +16,4 @@ pydub>=0.25.1
 python-dotenv>=1.0.1
 
 # Build system
-setuptools>=78.1.1  # Dodano dla kompatybilności z PyPI i bezpieczeństwa
+setuptools>=69.0.0  # Najnowsza dostępna stabilna wersja na PyPI (kompatybilność, bezpieczeństwo)
