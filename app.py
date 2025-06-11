@@ -205,7 +205,7 @@ def init_paths(file_data: bytes, file_ext: str):
             - transcript_path (Path): Ścieżka do pliku transkrypcji
             - summary_path (Path): Ścieżka do pliku podsumowania
     """
-    file_uid = hashlib.md5(file_data, usedforsecurity=False).hexdigest()
+    file_uid = hashlib.sha256(file_data).hexdigest()
     orig_path = BASE_DIR / "originals" / f"{file_uid}{file_ext}"
     transcript_path = BASE_DIR / "transcripts" / f"{file_uid}.txt"
     summary_path = BASE_DIR / "summaries" / f"{file_uid}.txt"

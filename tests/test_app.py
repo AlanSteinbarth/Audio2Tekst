@@ -23,9 +23,7 @@ class TestAudioProcessing:
         """Test inicjalizacji ścieżek plików."""  # Symulacja funkcji init_paths bez importu app.py
         data = sample_audio_data
         ext = ".wav"
-        uid = hashlib.md5(
-            data, usedforsecurity=False
-        ).hexdigest()  # nosec B324 # Test helper
+        uid = hashlib.sha256(data).hexdigest()  # Test helper (zmiana md5 na sha256)
 
         orig = temp_dir / "originals" / f"{uid}{ext}"
         tr = temp_dir / "transcripts" / f"{uid}.txt"
@@ -42,8 +40,8 @@ class TestAudioProcessing:
         assert orig.exists()
         assert orig.stat().st_size == len(data)
         assert (
-            uid == hashlib.md5(data, usedforsecurity=False).hexdigest()
-        )  # nosec B324 # Test helper
+            uid == hashlib.sha256(data).hexdigest()
+        )  # Test helper (zmiana md5 na sha256)
 
     def test_clean_transcript(self):
         """Test czyszczenia transkrypcji."""
@@ -275,9 +273,7 @@ class TestIntegration:
         """Test kompletnego workflow przetwarzania."""  # 1. Inicjalizacja ścieżek
         data = sample_audio_data
         ext = ".wav"
-        uid = hashlib.md5(
-            data, usedforsecurity=False
-        ).hexdigest()  # nosec B324 # Test helper
+        uid = hashlib.sha256(data).hexdigest()  # Test helper (zmiana md5 na sha256)
 
         # Tworzenie struktur katalogów
         for folder in ("originals", "transcripts", "summaries"):
