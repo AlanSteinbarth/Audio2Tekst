@@ -17,6 +17,24 @@ Autor: Alan Steinbarth (alan.steinbarth@gmail.com)
 GitHub: https://github.com/AlanSteinbarth
 Data: 11 czerwca 2025
 Wersja: 2.3.0 (Cross-Platform Edition)
+
+=======================================
+SPIS TREŚCI (SEKCJE KODU)
+=======================================
+1. Importy i konfiguracja
+2. Funkcje pomocnicze (system, ścieżki, walidacja)
+3. Konfiguracja aplikacji i stałe
+4. Przetwarzanie pliku (ścieżki, czyszczenie, walidacja)
+5. Obsługa YouTube i plików lokalnych
+6. Przygotowanie do transkrypcji
+7. Odtwarzacz audio i pobieranie
+8. Zarządzanie stanem sesji
+9. Proces transkrypcji (split, transcribe, zapis)
+10. Interfejs po transkrypcji (wyświetlanie, pobieranie)
+11. Podsumowanie AI (generowanie, wyświetlanie, pobieranie)
+12. Panel diagnostyczny (informacje o systemie)
+13. Koniec aplikacji
+=======================================
 """
 
 # --- Importy systemowe ---
