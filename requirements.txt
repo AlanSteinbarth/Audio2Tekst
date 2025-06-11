@@ -3,7 +3,7 @@
 # =============================================================================
 
 # Core Application
-streamlit>=1.45.0
+streamlit>=1.30.0
 openai>=1.0.0
 werkzeug>=3.0.6  # Aktualizacja ze względów bezpieczeństwa (CVE-2023-25577)
 
