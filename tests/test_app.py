@@ -129,7 +129,8 @@ class TestOpenAIIntegration:
                     "Nie udało się wygenerować tematu",
                     "Nie udało się wygenerować podsumowania",
                 )
-            except Exception:
+            except Exception:  # noqa: B902
+                # Przechwytywanie ogólnego wyjątku tylko na potrzeby testu
                 return "Nie udało się wygenerować podsumowania", "Spróbuj ponownie"
 
         # Test
@@ -268,7 +269,7 @@ class TestIntegration:
     """Testy integracyjne."""
 
     def test_complete_workflow(
-        self, mock_openai_client, temp_dir, sample_audio_data, mock_env_vars
+        self, temp_dir, sample_audio_data
     ):
         """Test kompletnego workflow przetwarzania."""  # 1. Inicjalizacja ścieżek
         data = sample_audio_data
