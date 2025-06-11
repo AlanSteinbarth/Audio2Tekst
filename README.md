@@ -320,7 +320,7 @@ A: Sprawdź panel "Informacje o systemie" w aplikacji i zainstaluj FFmpeg zgodni
 
 ## 📄 Licencja
 
-Ten projekt jest licencjonowany na licencji MIT - zobacz plik [LICENSE](LICENSE) po szczegóły.
+Ten projekt jest licencjonowany na licencji MIT - zobacz plik [LICENSE](LICENSE.txt) po szczegóły.
 
 ## 🙏 Podziękowania
 
