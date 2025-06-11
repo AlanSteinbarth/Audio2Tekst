@@ -15,7 +15,7 @@ plików audio i video na tekst oraz generowania ich podsumowań.
 
 Autor: Alan Steinbarth (alan.steinbarth@gmail.com)
 GitHub: https://github.com/AlanSteinbarth
-Data: 29 maja 2025
+Data: 11 czerwca 2025
 Wersja: 2.3.0 (Cross-Platform Edition)
 """
 
@@ -169,7 +169,24 @@ CHUNK_MS = 5 * 60 * 1000  # 5 minut w ms
 
 
 def init_paths(file_data: bytes, file_ext: str):
-    """Inicjalizuje ścieżki dla plików na podstawie zawartości (hash MD5 jako UID). Usuwa stare pliki o tym UID z innymi rozszerzeniami, by uniknąć konfliktów."""
+    """
+    Inicjalizuje ścieżki dla plików na podstawie zawartości (hash MD5 jako UID).
+    
+    Funkcja tworzy unikalny identyfikator pliku (UID) na podstawie jego zawartości używając MD5,
+    następnie inicjalizuje ścieżki dla pliku oryginalnego, transkrypcji i podsumowania.
+    Usuwa stare pliki o tym samym UID z innymi rozszerzeniami, aby uniknąć konfliktów.
+    
+    Args:
+        file_data (bytes): Zawartość pliku audio/video
+        file_ext (str): Rozszerzenie pliku (np. '.mp3', '.wav')
+    
+    Returns:
+        tuple: (file_uid, orig_path, transcript_path, summary_path)
+            - file_uid (str): Unikalny identyfikator pliku (MD5 hash)
+            - orig_path (Path): Ścieżka do oryginalnego pliku
+            - transcript_path (Path): Ścieżka do pliku transkrypcji
+            - summary_path (Path): Ścieżka do pliku podsumowania
+    """
     file_uid = hashlib.md5(file_data, usedforsecurity=False).hexdigest()
     orig_path = BASE_DIR / "originals" / f"{file_uid}{file_ext}"
     transcript_path = BASE_DIR / "transcripts" / f"{file_uid}.txt"
@@ -219,7 +236,26 @@ def validate_youtube_url(youtube_url: str) -> bool:
 
 
 def download_youtube_audio(youtube_url: str):
-    """Pobiera audio z filmu YouTube i konwertuje do formatu MP3, jeśli to konieczne. Obsługuje błędy pobierania i waliduje link."""
+    """
+    Pobiera audio z filmu YouTube i konwertuje do formatu MP3, jeśli to konieczne.
+    
+    Funkcja waliduje URL YouTube, pobiera najlepszy dostępny format audio,
+    a następnie konwertuje do MP3 jeśli plik nie jest już w obsługiwanym formacie audio.
+    Obsługuje różne błędy pobierania i zapewnia szczegółowe komunikaty o błędach.
+    
+    Args:
+        youtube_url (str): URL filmu YouTube do pobrania
+    
+    Returns:
+        tuple: (file_data, file_extension)
+            - file_data (bytes): Zawartość pliku audio
+            - file_extension (str): Rozszerzenie pliku (np. '.mp3', '.wav')
+    
+    Raises:
+        ValueError: Gdy URL jest nieprawidłowy
+        RuntimeError: Gdy wystąpi błąd podczas pobierania lub konwersji
+        FileNotFoundError: Gdy nie znaleziono pliku audio
+    """
     if not validate_youtube_url(youtube_url):
         raise ValueError(
             "Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube."
@@ -310,7 +346,21 @@ def download_youtube_audio(youtube_url: str):
 
 
 def get_duration(file_path: Path) -> float:
-    """Zwraca długość pliku audio/video w sekundach przy użyciu ffprobe."""
+    """
+    Zwraca długość pliku audio/video w sekundach przy użyciu ffprobe.
+    
+    Funkcja wykorzystuje narzędzie ffprobe do analizy metadanych pliku
+    i wyciągnięcia informacji o długości trwania w sekundach.
+    
+    Args:
+        file_path (Path): Ścieżka do pliku audio/video
+    
+    Returns:
+        float: Długość pliku w sekundach
+    
+    Raises:
+        RuntimeError: Gdy ffprobe nie jest dostępne lub wystąpi błąd podczas analizy
+    """
     # Sprawdź dostępność ffprobe
     dependencies_info = check_dependencies()
     if not dependencies_info["ffprobe"]["available"]:
@@ -346,7 +396,22 @@ def get_duration(file_path: Path) -> float:
 
 
 def split_audio(file_path: Path):
-    """Dzieli długie pliki audio na mniejsze części do przetworzenia (chunking, FFmpeg)."""
+    """
+    Dzieli długie pliki audio na mniejsze części do przetworzenia (chunking).
+    
+    Funkcja analizuje długość pliku audio i dzieli go na fragmenty o długości
+    określonej przez CHUNK_MS (domyślnie 5 minut). Każdy fragment jest zapisywany
+    jako oddzielny plik tymczasowy do dalszego przetwarzania przez OpenAI API.
+    
+    Args:
+        file_path (Path): Ścieżka do oryginalnego pliku audio/video
+    
+    Returns:
+        list[Path]: Lista ścieżek do plików fragmentów
+    
+    Raises:
+        RuntimeError: Gdy FFmpeg nie jest dostępne lub wystąpi błąd podczas dzielenia
+    """
     # Sprawdź dostępność ffmpeg
     dependencies_info = check_dependencies()
     if not dependencies_info["ffmpeg"]["available"]:
@@ -407,7 +472,19 @@ def split_audio(file_path: Path):
 
 
 def clean_transcript(transcript_text: str) -> str:
-    """Czyści transkrypcję z typowych artefaktów mowy (um, yhm, itp.)."""
+    """
+    Czyści transkrypcję z typowych artefaktów mowy.
+    
+    Usuwa często występujące w transkrypcjach słowa wypełniające
+    jak "um", "uh", "em", "yhm" oraz wielokrotnie powtarzające się litery.
+    Normalizuje białe znaki i usuwa nadmiarowe spacje.
+    
+    Args:
+        transcript_text (str): Surowa transkrypcja do wyczyszczenia
+    
+    Returns:
+        str: Wyczyszczona transkrypcja
+    """
     cleaned_text = re.sub(
         r"\b(?:em|yhm|um|uh|a{2,}|y{2,})\b", "", transcript_text, flags=re.IGNORECASE
     )
@@ -416,7 +493,28 @@ def clean_transcript(transcript_text: str) -> str:
 
 
 def transcribe_chunks(audio_chunks, openai_client):
-    """Transkrybuje podzielone fragmenty audio na tekst używając OpenAI Whisper API. Obsługuje długie pliki i błędy API. Dodano szczegółową diagnostykę fragmentów."""
+    """
+    Transkrybuje podzielone fragmenty audio na tekst używając OpenAI Whisper API.
+    
+    Funkcja przetwarza listę fragmentów audio, wysyłając każdy do OpenAI Whisper API
+    w celu transkrypcji. Obsługuje długie pliki poprzez przetwarzanie fragmentów,
+    zapewnia szczegółową diagnostykę i obsługę błędów. Wyświetla postęp przetwarzania
+    i informuje o problemach z poszczególnymi fragmentami.
+    
+    Args:
+        audio_chunks (list[Path]): Lista ścieżek do fragmentów audio
+        openai_client: Klient OpenAI API
+    
+    Returns:
+        str: Połączona transkrypcja wszystkich fragmentów
+    
+    Features:
+        - Sprawdzanie rozmiaru fragmentów
+        - Czyszczenie transkrypcji z artefaktów
+        - Diagnostyka pustych/problematycznych fragmentów
+        - Automatyczne czyszczenie plików tymczasowych
+        - Komunikaty o postępie dla długich plików
+    """
     texts = []
     long_transcription_msg = "Plik audio poddawany transkrypcji jest bardzo duży. Potrzebuję więcej czasu. Cierpliwości..."
     show_long_msg = [False]
@@ -527,7 +625,30 @@ def transcribe_chunks(audio_chunks, openai_client):
 
 
 def summarize(input_text: str, openai_client):
-    """Generuje temat i podsumowanie z transkrypcji, dzieląc długi tekst na fragmenty. Obsługuje błędy API i limity długości."""
+    """
+    Generuje temat i podsumowanie z transkrypcji przy użyciu OpenAI GPT-3.5.
+    
+    Funkcja analizuje długość tekstu i automatycznie dzieli długie transkrypcje
+    na fragmenty, aby zmieścić się w limitach OpenAI API. Dla każdego fragmentu
+    generuje częściowe podsumowanie, a następnie tworzy finalne podsumowanie
+    z wszystkich części. Obsługuje różne błędy API i zapewnia szczegółowe logowanie.
+    
+    Args:
+        input_text (str): Tekst transkrypcji do podsumowania
+        openai_client: Klient OpenAI API
+    
+    Returns:
+        tuple: (topic, summary)
+            - topic (str): Temat w jednym zdaniu
+            - summary (str): Podsumowanie w 3-5 zdaniach
+    
+    Features:
+        - Automatyczne dzielenie długich tekstów (>8000 znaków)
+        - Hierarchiczne podsumowywanie (fragmenty → częściowe → finalne)
+        - Obsługa błędów quota/billing OpenAI
+        - Szczegółowe logowanie do pliku
+        - Komunikaty o postępie dla użytkownika
+    """
     log_path = Path("logs/summary_errors.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     # Usunięto komunikat o długim tekście
@@ -712,15 +833,21 @@ def summarize(input_text: str, openai_client):
     )
 
 
-# --- Interfejs użytkownika ---
-# Panel boczny: wybór źródła audio (plik lokalny lub YouTube)
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTERFEJS UŻYTKOWNIKA - GŁÓWNA APLIKACJA STREAMLIT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# --- Sekcja 1: Panel boczny - Wybór źródła audio ---
+# Użytkownik może wybrać między plikiem lokalnym a linkiem YouTube
 src = st.sidebar.radio("Wybierz źródło audio:", ["Plik lokalny", "YouTube"])
 
-# Inicjalizacja zmiennych do obsługi pliku i błędów
+# --- Sekcja 2: Inicjalizacja zmiennych i stanu sesji ---
+# Zmienne do przechowywania danych pliku i obsługi błędów
 data, ext = None, None
 error_message = None
 
-# Flagi i obsługa stanu sesji dla YouTube (zapobiega dublowaniu pobierania i pozwala na czyszczenie starych danych)
+# --- Sekcja 3: Zarządzanie stanem sesji dla YouTube ---
+# Flagi zapobiegające dublowaniu pobierania i umożliwiające czyszczenie starych danych
 if "yt_success" not in st.session_state:
     st.session_state["yt_success"] = False
 if "yt_data" not in st.session_state:
@@ -780,8 +907,9 @@ if src == "YouTube":
         st.session_state["yt_ext"] = None
         st.session_state["yt_prev_uid"] = None
         st.session_state["yt_prev_url"] = url
-    # --- KONIEC RESETU ---
-    # Jeśli już pobrano audio, przypisz z sesji
+    
+    # --- Sekcja 4A: Pobieranie audio z YouTube ---
+    # Sprawdzenie czy audio już zostało pobrane (cache w session_state)
     if (
         st.session_state.get("yt_success")
         and st.session_state.get("yt_data")
@@ -791,6 +919,7 @@ if src == "YouTube":
         ext = st.session_state["yt_ext"]
         st.success("Pomyślnie pobrano audio z YouTube!")
     elif url:
+        # Pobieranie nowego pliku z YouTube z obsługą błędów
         try:
             with st.spinner("Pobieranie audio z YouTube..."):
                 data, ext = download_youtube_audio(url)
@@ -800,9 +929,7 @@ if src == "YouTube":
                     )
                 st.session_state["yt_success"] = True
                 st.session_state["yt_data"] = data
-                st.session_state["yt_ext"] = (
-                    ext  # Zapisz UID do późniejszego czyszczenia
-                )
+                st.session_state["yt_ext"] = ext
                 uid, _, _, _ = init_paths(data, ext)
                 st.session_state["yt_prev_uid"] = uid
                 st.session_state["yt_prev_url"] = url
@@ -826,16 +953,20 @@ if src == "YouTube":
             st.session_state["yt_data"] = None
             st.session_state["yt_ext"] = None
             st.stop()
-        # Po pobraniu przypisz do lokalnych zmiennych
+        
+        # Cache'owanie danych po pobraniu
         data = st.session_state["yt_data"]
         ext = st.session_state["yt_ext"]
     else:
+        # Brak URL - wyczyść stan i zatrzymaj
         st.session_state["yt_success"] = False
         st.session_state["yt_data"] = None
         st.session_state["yt_ext"] = None
         st.stop()
+
+# --- Sekcja 4B: Obsługa plików lokalnych ---
 else:
-    # Obsługa plików lokalnych (upload przez użytkownika)
+    # Upload pliku przez użytkownika z ograniczeniem typów
     up = st.sidebar.file_uploader(
         "Wybierz plik", type=[e.strip(".") for e in ALLOWED_EXT]
     )
@@ -844,14 +975,20 @@ else:
     else:
         st.stop()
 
-# Sprawdź czy mamy dane do przetworzenia
+# --- Sekcja 5: Walidacja danych ---
+# Sprawdzenie czy mamy dane do przetworzenia
 if data is None or ext is None:
     st.stop()
 
-# --- Przetwarzanie pliku ---
-# Inicjalizacja ścieżek i UID, wyświetlenie odtwarzacza audio oraz przycisków pobierania
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRZETWARZANIE PLIKU - PRZYGOTOWANIE DO TRANSKRYPCJI
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# --- Sekcja 6: Inicjalizacja ścieżek i metadanych ---
+# Tworzenie UID na podstawie zawartości pliku i przygotowanie ścieżek
 uid, orig, tr, sm = init_paths(data, ext)
-# DIAGNOSTYKA: rozmiar i ścieżka pliku przed split_audio
+
+# Diagnostyka: informacje o pliku
 file_size = orig.stat().st_size if orig.exists() else 0
 st.info(
     f"Plik do transkrypcji: {orig} | Rozmiar: {file_size/1024:.1f} KB | Format: {ext}"
@@ -860,17 +997,19 @@ logger.info(
     "Plik do transkrypcji: %s | Rozmiar: %d bajtów | Format: %s", orig, file_size, ext
 )
 
-# --- KONWERSJA DO WAV (PCM) tylko jeśli wymagane przez split_audio ---
-# Usuwamy wymuszanie konwersji do WAV – Whisper/OpenAI obsługuje mp3, wav, m4a, webm, mp4
-# Konwersja do WAV tylko jeśli split_audio zgłosi błąd lub plik nie jest obsługiwany
+# --- Sekcja 7: Przygotowanie pliku do transkrypcji ---
+# Whisper/OpenAI obsługuje bezpośrednio: mp3, wav, m4a, webm, mp4
+# Konwersja do WAV tylko w przypadku problemów ze split_audio
 split_input = orig
 
+# --- Sekcja 8: Odtwarzacz audio i opcje pobierania ---
 st.audio(orig.read_bytes(), format=ext.lstrip("."))
-# Przycisk pobierania audio (zawsze pod odtwarzaczem)
+
+# Przycisk pobierania audio (umieszczony bezpośrednio pod odtwarzaczem)
 if ext in [".mp3", ".wav", ".m4a"]:
     st.download_button("Pobierz audio", orig.read_bytes(), file_name=f"{uid}{ext}")
 else:
-    # Konwersja do mp3 na żądanie (jeśli to plik video lub webm)
+    # Konwersja do MP3 na żądanie dla plików video (MP4, WEBM, MOV, AVI)
     mp3_path = orig.with_suffix(".mp3")
     if not mp3_path.exists():
         deps_info = check_dependencies()
@@ -897,33 +1036,36 @@ else:
             "Pobierz audio (oryginał)", orig.read_bytes(), file_name=f"{uid}{ext}"
         )
 
-# --- Stan sesji ---
-# Tworzenie unikalnych kluczy sesji dla danego pliku (UID) do zarządzania stanem transkrypcji i podsumowania
-# Pozwala na obsługę wielu plików w jednej sesji Streamlit
-# done_key: czy transkrypcja została wykonana
-# topic_key: temat podsumowania
-# sum_key: treść podsumowania
+# --- Sekcja 9: Zarządzanie stanu sesji ---
+# Tworzenie unikalnych kluczy sesji dla danego pliku (UID)
+# Pozwala na obsługę wielu plików w jednej sesji Streamlit bez konfliktów
+done_key = f"done_{uid}"        # Czy transkrypcja została wykonana
+topic_key = f"topic_{uid}"      # Temat podsumowania
+sum_key = f"summary_{uid}"      # Treść podsumowania
 
-done_key = f"done_{uid}"
-topic_key = f"topic_{uid}"
-sum_key = f"summary_{uid}"
+# Inicjalizacja kluczy sesji z wartościami domyślnymi
 for key, default in [(done_key, False), (topic_key, ""), (sum_key, "")]:
     if key not in st.session_state:
         st.session_state[key] = default
 
-# --- Transkrypcja ---
-# Obsługa procesu transkrypcji pliku audio/video na tekst
-# - Dzieli plik na fragmenty (jeśli długi)
-# - Przetwarza każdy fragment przez OpenAI Whisper
-# - Obsługuje błędy i informuje użytkownika o problemach
+# ═══════════════════════════════════════════════════════════════════════════════
+# PROCES TRANSKRYPCJI - PRZETWARZANIE AUDIO NA TEKST
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# --- Sekcja 10: Sprawdzenie stanu transkrypcji ---
+# Sprawdzamy czy transkrypcja już istnieje w pliku
 transcript_exists = tr.exists() and tr.stat().st_size > 0
+
+# --- Sekcja 11: Proces transkrypcji ---
+# Główny proces transkrypcji uruchamiany przyciskiem
 if st.button("Transkrybuj") and not st.session_state[done_key]:
     try:
-        # dzielenie i transkrypcja
-        chunks = split_audio(split_input)  # Dzieli plik na fragmenty (chunking)
+        # Krok 1: Podział pliku na fragmenty
+        chunks = split_audio(split_input)
         st.info(f"Liczba fragmentów audio: {len(chunks)}")
         logger.info("Liczba fragmentów audio po split_audio: %d", len(chunks))
-        # DIAGNOSTYKA: rozmiary fragmentów
+        
+        # Krok 2: Diagnostyka fragmentów
         empty_audio_chunks_diag = []
         for diag_idx, diag_chunk in enumerate(chunks):
             size = diag_chunk.stat().st_size if diag_chunk.exists() else 0
@@ -932,11 +1074,14 @@ if st.button("Transkrybuj") and not st.session_state[done_key]:
             )
             if size == 0:
                 empty_audio_chunks_diag.append(diag_chunk)
+        
+        # Krok 3: Walidacja fragmentów
         if not chunks:
             st.error(
                 "Nie udało się podzielić pliku na fragmenty. Sprawdź format pliku lub spróbuj ponownie."
             )
             st.stop()
+        
         if empty_audio_chunks_diag:
             st.warning(
                 f"UWAGA: {len(empty_audio_chunks_diag)} fragment(ów) ma rozmiar 0 bajtów i nie zostanie przetworzonych. Sprawdź źródłowy plik audio lub format."
@@ -945,9 +1090,11 @@ if st.button("Transkrybuj") and not st.session_state[done_key]:
                 "Fragmenty o rozmiarze 0 bajtów: %s",
                 [str(c) for c in empty_audio_chunks_diag],
             )
-        transcription_text = transcribe_chunks(
-            chunks, client
-        )  # Transkrypcja każdego fragmentu
+        
+        # Krok 4: Transkrypcja fragmentów
+        transcription_text = transcribe_chunks(chunks, client)
+        
+        # Krok 5: Walidacja wyników transkrypcji
         if not transcription_text.strip():
             st.error(
                 "Transkrypcja nie powiodła się lub plik jest pusty/nieobsługiwany. Sprawdź format pliku lub spróbuj ponownie."
@@ -958,45 +1105,89 @@ if st.button("Transkrybuj") and not st.session_state[done_key]:
                 len(empty_audio_chunks_diag),
             )
             st.stop()
+        
+        # Krok 6: Zapis transkrypcji do pliku
         encoding = get_safe_encoding()
-        tr.write_text(
-            transcription_text, encoding=encoding
-        )  # Zapis transkryptu do pliku
+        tr.write_text(transcription_text, encoding=encoding)
+        
+        # Krok 7: Aktualizacja stanu sesji
         st.session_state[done_key] = True
         st.session_state[topic_key] = ""
         st.session_state[sum_key] = ""
+        
     except (OSError, ValueError) as e:
         # Globalna obsługa błędów transkrypcji
         logger.error("Błąd podczas transkrypcji: %s", e)
         st.error(f"❌ Błąd podczas transkrypcji: {e}")
         st.stop()
 
-# --- UI po transkrypcji ---
-# Wyświetlanie i obsługa transkryptu oraz podsumowania po zakończonej transkrypcji
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTERFEJS PO TRANSKRYPCJI - WYŚWIETLANIE I PODSUMOWANIE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# --- Sekcja 12: Wyświetlanie transkrypcji ---
+# Panel wyświetlania transkrypcji po zakończonym procesie lub wczytaniu istniejącego pliku
 if st.session_state[done_key] or transcript_exists:
     encoding = get_safe_encoding()
     transcript = tr.read_text(encoding=encoding) if tr.exists() else ""
+    
     st.subheader("Transkrypt:")
     st.text_area("Transkrypcja", transcript, height=300)
-    # Przycisk pobierania transkryptu
+    
+    # Przycisk pobierania transkrypcji
     st.download_button(
         "Pobierz transkrypt", transcript, file_name=f"{uid}_transkrypt.txt"
     )
-    # Przycisk podsumowania i obsługa podsumowania
+    
+    # --- Sekcja 13: Proces podsumowania ---
+    # Generowanie tematu i podsumowania z transkrypcji
     if st.button("Podsumuj"):
-        # Wywołanie funkcji podsumowującej z obsługą błędów w summarize()
         result_topic, result_summary = summarize(transcript, client)
         st.session_state[topic_key] = result_topic
         st.session_state[sum_key] = result_summary
-    # Wyświetlanie podsumowania jeśli istnieje
+    
+    # --- Sekcja 14: Wyświetlanie podsumowania ---
+    # Panel wyświetlania wygenerowanego tematu i podsumowania
     if st.session_state[topic_key] or st.session_state[sum_key]:
         st.subheader("Temat:")
         st.write(st.session_state[topic_key])
+        
         st.subheader("Podsumowanie:")
         st.write(st.session_state[sum_key])
+        
         # Przycisk pobierania podsumowania
         st.download_button(
             "Pobierz podsumowanie",
             st.session_state[sum_key],
             file_name=f"{uid}_podsumowanie.txt",
         )
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PANEL INFORMACJI O SYSTEMIE - DIAGNOSTYKA I DEBUGGING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# --- Sekcja 15: Panel informacji o systemie ---
+# Rozwijany panel z informacjami technicznymi o środowisku
+with st.sidebar.expander("ℹ️ Informacje o systemie"):
+    sys_info = get_system_info()
+    deps_info = check_dependencies()
+    
+    st.write("**Platforma:**", sys_info["platform"].title())
+    st.write("**Architektura:**", sys_info["architecture"])
+    st.write("**Python:**", sys_info["python_version"])
+    
+    st.write("**Zależności:**")
+    for tool, info in deps_info.items():
+        status = "✅ Dostępne" if info["available"] else "❌ Niedostępne"
+        st.write(f"- {tool.upper()}: {status}")
+        if info["available"] and info["path"]:
+            st.write(f"  📁 Ścieżka: `{info['path']}`")
+    
+    st.write("**Kodowanie:**", get_safe_encoding())
+    st.write("**Obsługiwane formaty:**", ", ".join(ALLOWED_EXT))
+    st.write("**Maksymalny rozmiar:**", f"{MAX_SIZE/1024/1024:.1f} MB")
+    st.write("**Długość fragmentu:**", f"{CHUNK_MS/1000/60:.0f} minut")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KONIEC APLIKACJI
+# ═══════════════════════════════════════════════════════════════════════════════

@@ -35,4 +35,4 @@ Dziękujemy za zainteresowanie współpracą przy projekcie! Oto kilka wskazówe
 
 Jeśli masz pytania dotyczące projektu, możesz:
 - Otworzyć Issue z tagiem "question"
-- Wysłać email na adres alexmolenda@example.com
+- Wysłać email na adres alan.steinbarth@gmail.com
