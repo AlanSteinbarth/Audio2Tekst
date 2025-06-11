@@ -167,3 +167,6 @@ development/
 # Monitoring & Profiling
 .prof
 *.prof
+
+# Requirements
+requirements-dev.txt
