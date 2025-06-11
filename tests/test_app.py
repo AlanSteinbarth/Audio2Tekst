@@ -268,9 +268,7 @@ class TestStreamlitIntegration:
 class TestIntegration:
     """Testy integracyjne."""
 
-    def test_complete_workflow(
-        self, temp_dir, sample_audio_data
-    ):
+    def test_complete_workflow(self, temp_dir, sample_audio_data):
         """Test kompletnego workflow przetwarzania."""  # 1. Inicjalizacja ścieżek
         data = sample_audio_data
         ext = ".wav"
