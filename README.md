@@ -1,7 +1,5 @@
 # 📼 Audio2Tekst 📝
 
-![Audio2Tekst Logo](https://via.placeholder.com/800x200/2E86AB/FFFFFF?text=Audio2Tekst+%7C+AI-Powered+Transcription)
-
 <div align="center">
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)

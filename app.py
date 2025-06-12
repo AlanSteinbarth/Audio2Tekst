@@ -1268,7 +1268,7 @@ with tab2:
     with col1:
         st.markdown("### Panel wyboru źródła")
         # Placeholder dla screenshot głównego panelu
-        st.image("https://via.placeholder.com/500x350/3498DB/FFFFFF?text=Panel+wyboru+%C5%BAr%C3%B3d%C5%82a+audio", 
+        st.image("assets/screenshots/panel-wyboru.png", 
                 caption="Panel boczny z opcjami wyboru źródła: plik lokalny lub YouTube")
         
         st.markdown("""
@@ -1282,7 +1282,7 @@ with tab2:
     with col2:
         st.markdown("### Obszar główny")
         # Placeholder dla screenshot obszaru głównego
-        st.image("https://via.placeholder.com/500x350/2ECC71/FFFFFF?text=G%C5%82%C3%B3wny+obszar+roboczy", 
+        st.image("assets/screenshots/obszar-glowny.png", 
                 caption="Główny obszar roboczy z odtwarzaczem i kontrolkami")
         
         st.markdown("""
@@ -1304,19 +1304,19 @@ with tab2:
     progress_cols = st.columns(4)
     
     with progress_cols[0]:
-        st.image("https://via.placeholder.com/200x150/E74C3C/FFFFFF?text=1.+Upload", 
+        st.image("assets/screenshots/proces-1-upload.png", 
                 caption="1. Wybór i upload pliku")
         
     with progress_cols[1]:
-        st.image("https://via.placeholder.com/200x150/F39C12/FFFFFF?text=2.+Analiza", 
+        st.image("assets/screenshots/proces-2-analiza.png", 
                 caption="2. Analiza i podział na fragmenty")
         
     with progress_cols[2]:
-        st.image("https://via.placeholder.com/200x150/3498DB/FFFFFF?text=3.+Transkrypcja", 
+        st.image("assets/screenshots/proces-3-transkrypcja.png", 
                 caption="3. Transkrypcja AI (Whisper)")
         
     with progress_cols[3]:
-        st.image("https://via.placeholder.com/200x150/2ECC71/FFFFFF?text=4.+Wyniki", 
+        st.image("assets/screenshots/proces-4-wyniki.png", 
                 caption="4. Wyświetlenie wyników")
     
     st.markdown("---")
@@ -1328,7 +1328,7 @@ with tab2:
     
     with result_col1:
         st.markdown("### 📝 Transkrypcja")
-        st.image("https://via.placeholder.com/500x300/9B59B6/FFFFFF?text=Obszar+transkrypcji", 
+        st.image("assets/screenshots/obszar-transkrypcji.png", 
                 caption="Edytowalny obszar tekstowy z transkrypcją")
         
         st.markdown("""
@@ -1341,7 +1341,7 @@ with tab2:
     
     with result_col2:
         st.markdown("### 🎯 Podsumowanie AI")
-        st.image("https://via.placeholder.com/500x300/E67E22/FFFFFF?text=Podsumowanie+AI", 
+        st.image("assets/screenshots/podsumowanie-ai.png", 
                 caption="Automatyczne podsumowanie wygenerowane przez GPT-3.5")
         
         st.markdown("""
@@ -1361,17 +1361,17 @@ with tab2:
     
     with advanced_col1:
         st.markdown("### 🌐 YouTube Integration")
-        st.image("https://via.placeholder.com/300x200/C0392B/FFFFFF?text=YouTube+Download", 
+        st.image("assets/screenshots/youtube-integration.png", 
                 caption="Pobieranie i konwersja audio z YouTube")
         
     with advanced_col2:
         st.markdown("### 🔧 System Info")
-        st.image("https://via.placeholder.com/300x200/8E44AD/FFFFFF?text=System+Diagnostics", 
+        st.image("assets/screenshots/system-diagnostics.png", 
                 caption="Panel diagnostyczny systemu")
         
     with advanced_col3:
         st.markdown("### 📊 Progress Tracking")
-        st.image("https://via.placeholder.com/300x200/27AE60/FFFFFF?text=Progress+Bars", 
+        st.image("assets/screenshots/progress-tracking.png", 
                 caption="Śledzenie postępu przetwarzania")
     
     st.markdown("---")
@@ -1383,34 +1383,33 @@ with tab2:
     
     with os_col1:
         st.markdown("### 🪟 Windows")
-        st.image("https://via.placeholder.com/300x200/0078D4/FFFFFF?text=Windows+10%2F11", 
-                caption="Pełna kompatybilność z Windows 10/11")
+        st.markdown("**Pełna kompatybilność z Windows 10/11**")
         st.markdown("- x64 i ARM64\n- Automatyczne wykrywanie FFmpeg\n- UTF-8-sig encoding")
         
     with os_col2:
         st.markdown("### 🍎 macOS")
-        st.image("https://via.placeholder.com/300x200/000000/FFFFFF?text=macOS+10.15%2B", 
-                caption="Obsługa Intel i Apple Silicon")
+        st.markdown("**Obsługa Intel i Apple Silicon**")
         st.markdown("- Intel & Apple Silicon\n- Homebrew integration\n- Native performance")
         
     with os_col3:
         st.markdown("### 🐧 Linux")
-        st.image("https://via.placeholder.com/300x200/FCC624/000000?text=Ubuntu%2FDebian%2FArch", 
-                caption="Szerokie wsparcie dystrybucji Linux")
+        st.markdown("**Szerokie wsparcie dystrybucji Linux**")
         st.markdown("- Ubuntu, Debian, CentOS\n- Fedora, Arch Linux\n- Package managers")
     
-    # Informacja o placeholder
+    # Informacja o screenshots
     st.markdown("---")
-    st.info("""
-    📋 **Informacja**: Obecnie wyświetlane są placeholder images. 
-    Aby zastąpić je prawdziwymi screenshots:
+    st.success("""
+    ✅ **Screenshots zaktualizowane!** 
     
-    1. Uruchom aplikację: `streamlit run app.py`
-    2. Wykonaj zrzuty ekranu głównych funkcji
-    3. Zapisz images w folderze `assets/screenshots/`
-    4. Zaktualizuj ścieżki w kodzie
+    Wszystkie placeholder images zostały zastąpione prawdziwymi screenshots aplikacji.
+    Galeria zawiera:
     
-    Szczegółowe instrukcje znajdują się w pliku `ASSETS.md`
+    🏠 **Interfejs główny**: Panel wyboru, obszar roboczy
+    🔄 **Proces transkrypcji**: 4-etapowy workflow (Upload → Analiza → Transkrypcja → Wyniki)  
+    📄 **Wyniki**: Transkrypcja i podsumowanie AI
+    ⚙️ **Funkcje zaawansowane**: YouTube, diagnostyka, progress tracking
+    
+    📁 Wszystkie pliki dostępne w: `assets/screenshots/`
     """)
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1525,8 +1524,8 @@ with tab3:
     author_col1, author_col2 = st.columns([1, 2])
     
     with author_col1:
-        st.image("https://via.placeholder.com/150x150/2C3E50/FFFFFF?text=AS", 
-                caption="Alan Steinbarth")
+        st.markdown("**👨‍💻 Alan Steinbarth**")
+        st.markdown("*Software Developer & AI Enthusiast*")
         
     with author_col2:
         st.markdown("""
