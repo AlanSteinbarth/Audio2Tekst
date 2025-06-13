@@ -201,7 +201,7 @@ Aplikacja będzie dostępna pod adresem: `http://localhost:8501`
 ## 📸 Zrzuty ekranu
 
 ### Główny interfejs aplikacji
-<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.07.51.png" alt="Interfejs główny" width="600"/>
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.07.51.png" alt="Interfejs główny" height="400"/>
 
 *Przejrzysty interfejs z panelem bocznym do wprowadzania klucza API i wyboru źródła audio*
 
@@ -226,7 +226,7 @@ Aplikacja będzie dostępna pod adresem: `http://localhost:8501`
 *Inteligentne podsumowanie z tematem i kluczowymi punktami*
 
 ### Obsługa YouTube
-<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.11.47.png" alt="YouTube support" width="600"/>
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.11.47.png" alt="YouTube support" height="400"/>
 
 *Bezpośrednia transkrypcja filmów z YouTube przez wklejenie linku*
 
