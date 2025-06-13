@@ -216,7 +216,7 @@ if not st.session_state.api_key_verified:
     user_api_key_input = st.sidebar.text_input(
         "Podaj swój OpenAI API Key:",
         type="password",
-        key="user_api_key_input_field",
+        key="user_api_key_input",
         value=st.session_state.get("current_input_key", ""),
         on_change=lambda: setattr(st.session_state, 'api_key_input_changed', True)
     )
@@ -262,6 +262,10 @@ source_option = st.sidebar.radio(
     # Ustawienia stylu przez markdown, by nie było dodatkowego marginesu
 )
 
+# Inicjalizacja zmiennych
+audio_file = None
+youtube_url = ""
+
 if source_option == "Plik lokalny":
     audio_file = st.sidebar.file_uploader(
         "Wybierz plik audio lub video do transkrypcji:",
@@ -269,441 +273,402 @@ if source_option == "Plik lokalny":
         accept_multiple_files=False,
         help="Obsługiwane formaty: mp3, wav, m4a, mp4, mov, avi, webm. Maksymalny rozmiar: 25MB."
     )
-    # --- Klucz API zweryfikowany, inicjalizacja klienta i główna aplikacja ---
-    try:
-        client = openai.OpenAI(api_key=st.session_state.api_key)
-    except Exception as e:  # nosec
-        st.error(f"Nie udało się zainicjować klienta OpenAI po weryfikacji klucza: {e}")
-        logger.error("Błąd inicjalizacji klienta OpenAI po weryfikacji: %s", e)
-        st.session_state.api_key_verified = False
-        st.rerun()
 
-    # --- Stałe i konfiguracja ścieżek ---
-    # Tworzymy katalogi na pliki oryginalne, transkrypcje i podsumowania
-    BASE_DIR = Path("uploads")
-    for folder in ("originals", "transcripts", "summaries"):
-        (BASE_DIR / folder).mkdir(parents=True, exist_ok=True)
-    ALLOWED_EXT = {".mp3", ".wav", ".m4a", ".mp4", ".mov", ".avi", ".webm"}
-    MAX_SIZE = 25 * 1024 * 1024  # 25MB
-    CHUNK_MS = 5 * 60 * 1000  # 5 minut w ms
+if source_option == "YouTube":
+    youtube_url = st.sidebar.text_input(
+        "Wklej adres www z YouTube:",
+        value="",
+        key="youtube_url_input",
+        help="Wklej pełny adres filmu z YouTube."
+    )
 
-    # --- Funkcje pomocnicze ---
-    # UWAGA: To jest ulepszona wersja programu Audio2Tekst
-    # Główne usprawnienia w wersji 2.3.0:
-    # ✅ Uniwersalna kompatybilność z Windows, macOS i Linux
-    # ✅ Automatyczne wykrywanie platformy i dostosowanie komend
-    # ✅ Poprawiona obsługa ścieżek plików i enkodowania
-    # ✅ Dodano sprawdzanie dostępności narzędzi systemowych
-    # ✅ Ulepszona obsługa plików tymczasowych
-    # ✅ Zwiększona stabilność na różnych środowiskach
+# --- Klucz API zweryfikowany, inicjalizacja klienta i główna aplikacja ---
+try:
+    client = openai.OpenAI(api_key=st.session_state.api_key)
+except Exception as e:  # nosec
+    st.error(f"Nie udało się zainicjować klienta OpenAI po weryfikacji klucza: {e}")
+    logger.error("Błąd inicjalizacji klienta OpenAI po weryfikacji: %s", e)
+    st.session_state.api_key_verified = False
+    st.rerun()
 
+# --- Stałe i konfiguracja ścieżek ---
+# Tworzymy katalogi na pliki oryginalne, transkrypcje i podsumowania
+BASE_DIR = Path("uploads")
+for folder in ("originals", "transcripts", "summaries"):
+    (BASE_DIR / folder).mkdir(parents=True, exist_ok=True)
+ALLOWED_EXT = {".mp3", ".wav", ".m4a", ".mp4", ".mov", ".avi", ".webm"}
+MAX_SIZE = 25 * 1024 * 1024  # 25MB
+CHUNK_MS = 5 * 60 * 1000  # 5 minut w ms
 
-    def init_paths(file_data: bytes, file_ext: str):
-        """
-        Inicjalizuje ścieżki dla plików na podstawie zawartości (hash MD5 jako UID).
-        
-        Funkcja tworzy unikalny identyfikator pliku (UID) na podstawie jego zawartości używając MD5,
-        następnie inicjalizuje ścieżki dla pliku oryginalnego, transkrypcji i podsumowania.
-        Usuwa stare pliki o tym samym UID z innymi rozszerzeniami, aby uniknąć konfliktów.
-        
-        Args:
-            file_data (bytes): Zawartość pliku audio/video
-            file_ext (str): Rozszerzenie pliku (np. '.mp3', '.wav')
-        
-        Returns:
-            tuple: (file_uid, orig_path, transcript_path, summary_path)
-                - file_uid (str): Unikalny identyfikator pliku (MD5 hash)
-                - orig_path (Path): Ścieżka do oryginalnego pliku
-                - transcript_path (Path): Ścieżka do pliku transkrypcji
-                - summary_path (Path): Ścieżka do pliku podsumowania
-        """
-        file_uid = hashlib.md5(file_data, usedforsecurity=False).hexdigest()
-        orig_path = BASE_DIR / "originals" / f"{file_uid}{file_ext}"
-        transcript_path = BASE_DIR / "transcripts" / f"{file_uid}.txt"
-        summary_path = BASE_DIR / "summaries" / f"{file_uid}.txt"
-        # Usuń stare pliki o tym UID z innymi rozszerzeniami
-        for audio_ext in [".mp3", ".wav", ".m4a", ".mp4", ".mov", ".avi", ".webm"]:
-            old_path = BASE_DIR / "originals" / f"{file_uid}{audio_ext}"
-            if old_path.exists() and old_path != orig_path:
-                try:
-                    old_path.unlink()
-                except OSError as cleanup_exc:
-                    logger.warning(
-                        "Nie udało się usunąć starego pliku %s: %s", old_path, cleanup_exc
-                    )
-        if not orig_path.exists():
-            orig_path.write_bytes(file_data)
-        return file_uid, orig_path, transcript_path, summary_path
+# --- Funkcje pomocnicze ---
+# UWAGA: To jest ulepszona wersja programu Audio2Tekst
+# Główne usprawnienia w wersji 2.3.0:
+# ✅ Uniwersalna kompatybilność z Windows, macOS i Linux
+# ✅ Automatyczne wykrywanie platformy i dostosowanie komend
+# ✅ Poprawiona obsługa ścieżek plików i enkodowania
+# ✅ Dodano sprawdzanie dostępności narzędzi systemowych
+# ✅ Ulepszona obsługa plików tymczasowych
+# ✅ Zwiększona stabilność na różnych środowiskach
 
 
-    # --- Automatyczne czyszczenie katalogu uploads/originals przy starcie aplikacji ---
-    def clean_uploads_originals():
-        """Usuwa wszystkie pliki z katalogu uploads/originals przy starcie aplikacji."""
-        originals_path = Path("uploads/originals")
-        if originals_path.exists():
-            for file in originals_path.iterdir():
-                try:
-                    file.unlink()
-                except OSError as e:
-                    logger.warning("Nie udało się usunąć pliku %s: %s", file, e)
-
-
-    clean_uploads_originals()
-
-
-    def validate_youtube_url(youtube_url: str) -> bool:
-        """Sprawdza czy URL jest prawidłowym adresem YouTube (różne formaty linków)."""
-        youtube_patterns = [
-            r"(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+",
-            r"(?:https?://)?(?:www\.)?youtu\.be/[\w-]+",
-            r"(?:https?://)?(?:www\.)?youtube\.com/embed/[\w-]+",
-            r"(?:https?://)?(?:www\.)?youtube\.com/v/[\w-]+",
-            r"(?:https?://)?(?:www\.)?youtube\.com/shorts/[\w-]+",
-            r"(?:https?://)?(?:m\.)?youtube\.com/watch\?v=[\w-]+",
-        ]
-
-        return any(re.match(pattern, youtube_url.strip()) for pattern in youtube_patterns)
-
-
-    def download_youtube_audio(youtube_url: str):
-        """
-        Pobiera audio z filmu YouTube i konwertuje do formatu MP3, jeśli to konieczne.
-        
-        Funkcja waliduje URL YouTube, pobiera najlepszy dostępny format audio,
-        a następnie konwertuje do MP3 jeśli plik nie jest już w obsługiwanym formacie audio.
-        Obsługuje różne błędy pobierania i zapewnia szczegółowe komunikaty o błędach.
-        
-        Args:
-            youtube_url (str): URL filmu YouTube do pobrania
-        
-        Returns:
-            tuple: (file_data, file_extension)
-                - file_data (bytes): Zawartość pliku audio
-                - file_extension (str): Rozszerzenie pliku (np. '.mp3', '.wav')
-        
-        Raises:
-            ValueError: Gdy URL jest nieprawidłowy
-            RuntimeError: Gdy wystąpi błąd podczas pobierania lub konwersji
-            FileNotFoundError: Gdy nie znaleziono pliku audio
-        """
-        if not validate_youtube_url(youtube_url):
-            raise ValueError(
-                "Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube."
-            )
-
-        tmpdir = tempfile.mkdtemp(prefix="audio2tekst_yt_")
-        try:
-            output_template = str(Path(tmpdir) / "%(id)s.%(ext)s")
-            ydl_opts = {
-                "format": "bestaudio[ext=webm]/bestaudio",
-                "outtmpl": output_template,
-                "quiet": True,
-                "noplaylist": True,
-                "extractaudio": True,
-                "audioformat": "webm",
-                "prefer_ffmpeg": True,
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([youtube_url])
-
-            for yt_file in Path(tmpdir).iterdir():
-                if yt_file.suffix.lower() in ALLOWED_EXT and yt_file.is_file():
-                    # Jeśli plik jest już mp3 lub wav, zwróć bez konwersji
-                    if yt_file.suffix.lower() in [".mp3", ".wav"]:
-                        file_data = yt_file.read_bytes()
-                        return file_data, yt_file.suffix.lower()
-                    # W przeciwnym razie konwertuj do mp3
-                    ffmpeg_deps = check_dependencies()
-                    if not ffmpeg_deps["ffmpeg"]["available"]:
-                        raise RuntimeError(
-                            "FFmpeg nie jest dostępny – nie można przekonwertować do MP3."
-                        )
-                    ffmpeg_bin = ffmpeg_deps["ffmpeg"]["path"]
-                    yt_mp3_path = yt_file.with_suffix(".mp3")
-                    ffmpeg_cmd = [ffmpeg_bin, "-y", "-i", str(yt_file), str(yt_mp3_path)]
-                    try:
-                        subprocess.run(
-                            ffmpeg_cmd,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            check=True,
-                        )
-                    except subprocess.CalledProcessError as conversion_exc:
-                        raise RuntimeError(
-                            f"Błąd konwersji do MP3: {conversion_exc}"
-                        ) from conversion_exc
-                    if yt_mp3_path.exists():
-                        file_data = yt_mp3_path.read_bytes()
-                        return file_data, ".mp3"
-                    else:
-                        raise RuntimeError("Konwersja do MP3 nie powiodła się.")
-            raise FileNotFoundError("Nie znaleziono pliku audio z YouTube")
-
-        except (OSError, FileNotFoundError, RuntimeError, KeyError) as exc:
-            error_msg = str(exc).lower()
-            if "is not a valid url" in error_msg or "invalid url" in error_msg:
-                raise ValueError(
-                    "Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube."
-                ) from exc
-            elif "video unavailable" in error_msg or "private video" in error_msg:
-                raise RuntimeError(
-                    "Film jest niedostępny lub prywatny. Spróbuj inny film YouTube."
-                ) from exc
-            elif "sign in" in error_msg or "age restricted" in error_msg:
-                raise RuntimeError(
-                    "Film wymaga logowania lub jest ograniczony wiekowo. Spróbuj inny film YouTube."
-                ) from exc
-            elif "copyright" in error_msg or "blocked" in error_msg:
-                raise RuntimeError(
-                    "Film jest zablokowany lub ma ograniczenia autorskie. Spróbuj inny film YouTube."
-                ) from exc
-            elif "network" in error_msg or "connection" in error_msg:
-                raise RuntimeError(
-                    "Błąd połączenia z YouTube. Sprawdź połączenie internetowe i spróbuj ponownie."
-                ) from exc
-            else:
-                logger.error("Błąd podczas pobierania z YouTube: %s", str(exc))
-                raise RuntimeError(
-                    "Wystąpił błąd podczas pobierania z YouTube. Sprawdź link i spróbuj ponownie."
-                ) from exc
-        finally:
+def init_paths(file_data: bytes, file_ext: str):
+    """
+    Inicjalizuje ścieżki dla plików na podstawie zawartości (hash MD5 jako UID).
+    
+    Funkcja tworzy unikalny identyfikator pliku (UID) na podstawie jego zawartości używając MD5,
+    następnie inicjalizuje ścieżki dla pliku oryginalnego, transkrypcji i podsumowania.
+    Usuwa stare pliki o tym samym UID z innymi rozszerzeniami, aby uniknąć konfliktów.
+    
+    Args:
+        file_data (bytes): Zawartość pliku audio/video
+        file_ext (str): Rozszerzenie pliku (np. '.mp3', '.wav')
+    
+    Returns:
+        tuple: (file_uid, orig_path, transcript_path, summary_path)
+            - file_uid (str): Unikalny identyfikator pliku (MD5 hash)
+            - orig_path (Path): Ścieżka do oryginalnego pliku
+            - transcript_path (Path): Ścieżka do pliku transkrypcji
+            - summary_path (Path): Ścieżka do pliku podsumowania
+    """
+    file_uid = hashlib.md5(file_data, usedforsecurity=False).hexdigest()
+    orig_path = BASE_DIR / "originals" / f"{file_uid}{file_ext}"
+    transcript_path = BASE_DIR / "transcripts" / f"{file_uid}.txt"
+    summary_path = BASE_DIR / "summaries" / f"{file_uid}.txt"
+    # Usuń stare pliki o tym UID z innymi rozszerzeniami
+    for audio_ext in [".mp3", ".wav", ".m4a", ".mp4", ".mov", ".avi", ".webm"]:
+        old_path = BASE_DIR / "originals" / f"{file_uid}{audio_ext}"
+        if old_path.exists() and old_path != orig_path:
             try:
-                shutil.rmtree(tmpdir)
+                old_path.unlink()
             except OSError as cleanup_exc:
                 logger.warning(
-                    "Nie udało się usunąć tymczasowego katalogu: %s", cleanup_exc
+                    "Nie udało się usunąć starego pliku %s: %s", old_path, cleanup_exc
                 )
+    if not orig_path.exists():
+        orig_path.write_bytes(file_data)
+    return file_uid, orig_path, transcript_path, summary_path
 
 
-    def get_duration(file_path: Path) -> float:
-        """
-        Zwraca długość pliku audio/video w sekundach przy użyciu ffprobe.
-        
-        Funkcja wykorzystuje narzędzie ffprobe do analizy metadanych pliku
-        i wyciągnięcia informacji o długości trwania w sekundach.
-        
-        Args:
-            file_path (Path): Ścieżka do pliku audio/video
-        
-        Returns:
-            float: Długość pliku w sekundach
-        
-        Raises:
-            RuntimeError: Gdy ffprobe nie jest dostępne lub wystąpi błąd podczas analizy
-        """
-        # Sprawdź dostępność ffprobe
-        dependencies_info = check_dependencies()
-        if not dependencies_info["ffprobe"]["available"]:
-            raise RuntimeError("FFprobe nie jest dostępne w systemie. Zainstaluj FFmpeg.")
-
-        ffprobe_path = dependencies_info["ffprobe"]["path"]
-        ffprobe_cmd = [
-            ffprobe_path,
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(file_path),
-        ]
-
-        try:
-            result = subprocess.run(  # nosec B603 # Bezpieczne wywołanie ffprobe z walidowanymi argumentami
-                ffprobe_cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,  # timeout dla bezpieczeństwa
-                check=True,
-            )
-            return float(result.stdout.strip())
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError("Przekroczono czas oczekiwania na analizę pliku") from exc
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeError(f"Błąd podczas analizy pliku: {exc}") from exc
-        except ValueError as exc:
-            raise RuntimeError(f"Nie można odczytać długości pliku: {exc}") from exc
-
-
-    def split_audio(file_path: Path):
-        """
-        Dzieli długie pliki audio na mniejsze części do przetworzenia (chunking).
-        """
-        dependencies_info = check_dependencies()
-        if not dependencies_info["ffmpeg"]["available"]:
-            raise RuntimeError("FFmpeg nie jest dostępne w systemie. Zainstaluj FFmpeg.")
-        ffmpeg_exe_path = dependencies_info["ffmpeg"]["path"]
-        duration = get_duration(file_path)
-        seg_sec = CHUNK_MS / 1000
-        parts = []
-        for i in range(math.ceil(duration / seg_sec)):
-            start = i * seg_sec
-            length = seg_sec if (start + seg_sec) <= duration else (duration - start)
-            fd, tmp = tempfile.mkstemp(suffix=file_path.suffix, prefix="audio2tekst_")
-            os.close(fd)
-            tmp_path = Path(tmp)
-            ffmpeg_cmd = [
-                ffmpeg_exe_path, "-y", "-i", str(file_path), "-ss", str(start), "-t", str(length), "-c", "copy", str(tmp_path)
-            ]
+# --- Automatyczne czyszczenie katalogu uploads/originals przy starcie aplikacji ---
+def clean_uploads_originals():
+    """Usuwa wszystkie pliki z katalogu uploads/originals przy starcie aplikacji."""
+    originals_path = Path("uploads/originals")
+    if originals_path.exists():
+        for file in originals_path.iterdir():
             try:
-                subprocess.run(
-                    ffmpeg_cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                    timeout=300,
-                    check=True,
-                    text=True,
-                )
-                parts.append(tmp_path)
-            except subprocess.TimeoutExpired as exc:
-                if tmp_path.exists():
-                    tmp_path.unlink()
-                raise RuntimeError(f"Przekroczono czas oczekiwania podczas dzielenia pliku (segment {i+1})") from exc
-            except subprocess.CalledProcessError as exc:
-                if tmp_path.exists():
-                    tmp_path.unlink()
-                logger.error("FFmpeg error: %s", exc.stderr)
-                raise RuntimeError(f"Błąd podczas dzielenia pliku (segment {i+1}): {exc}") from exc
-        return parts
+                file.unlink()
+            except OSError as e:
+                logger.warning("Nie udało się usunąć pliku %s: %s", file, e)
 
 
-    def clean_transcript(transcript_text: str) -> str:
-        """
-        Czyści transkrypcję z typowych artefaktów mowy.
-        """
-        cleaned_text = re.sub(r"\\b(?:em|yhm|um|uh|a{2,}|y{2,})\\b", "", transcript_text, flags=re.IGNORECASE)
-        cleaned_text = re.sub(r"\\s+", " ", cleaned_text)
-        return cleaned_text.strip()
+clean_uploads_originals()
 
 
-    def transcribe_chunks(audio_chunks, openai_client):
-        texts = []
-        long_transcription_msg = "Plik audio poddawany transkrypcji jest bardzo duży. Potrzebuję więcej czasu. Cierpliwości..."
-        show_long_msg = [False]
-        empty_audio_chunks = []
-        failed_audio_chunks = []
-        def delayed_info():
-            time.sleep(10)
-            show_long_msg[0] = True
-            st.info(long_transcription_msg)
-        thread = threading.Thread(target=delayed_info)
-        thread.start()
-        with st.spinner("Transkrypcja w toku..."):
-            for audio_idx, audio_chunk_file in enumerate(audio_chunks):
-                chunk_size = audio_chunk_file.stat().st_size if audio_chunk_file.exists() else 0
-                # Zamiast st.info, dodaj do audio_info_msgs
-                st.session_state.setdefault('audio_info_msgs', []).append(
-                    f"Fragment {audio_idx+1}/{len(audio_chunks)}: {audio_chunk_file} | Rozmiar: {chunk_size/1024:.1f} KB"
-                )
-                logger.info(
-                    "Fragment %d: %s | Rozmiar: %d bajtów",
-                    audio_idx + 1,
-                    audio_chunk_file,
-                    chunk_size,
-                )
-                if chunk_size == 0:
-                    empty_audio_chunks.append(audio_chunk_file)
-                    continue
-                try:
-                    if chunk_size <= MAX_SIZE:
-                        with open(audio_chunk_file, "rb") as audio_file:
-                            transcript_text = openai_client.audio.transcriptions.create(
-                                model="whisper-1",
-                                file=audio_file,
-                                language="pl",
-                                response_format="text",
-                            )
-                            cleaned_transcript = clean_transcript(str(transcript_text))
-                            if not cleaned_transcript.strip():
-                                failed_audio_chunks.append(audio_chunk_file)
-                            texts.append(cleaned_transcript)
-                    else:
-                        failed_audio_chunks.append(audio_chunk_file)
-                except (OSError, openai.OpenAIError) as exc:
-                    logger.error(
-                        "Błąd podczas transkrypcji fragmentu %s: %s",
-                        audio_chunk_file,
-                        str(exc),
+def validate_youtube_url(youtube_url: str) -> bool:
+    """Sprawdza czy URL jest prawidłowym adresem YouTube (różne formaty linków)."""
+    youtube_patterns = [
+        r"(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+",
+        r"(?:https?://)?(?:www\.)?youtu\.be/[\w-]+",
+        r"(?:https?://)?(?:www\.)?youtube\.com/embed/[\w-]+",
+        r"(?:https?://)?(?:www\.)?youtube\.com/v/[\w-]+",
+        r"(?:https?://)?(?:www\.)?youtube\.com/shorts/[\w-]+",
+        r"(?:https?://)?(?:m\.)?youtube\.com/watch\?v=[\w-]+",
+    ]
+
+    return any(re.match(pattern, youtube_url.strip()) for pattern in youtube_patterns)
+
+
+def download_youtube_audio(youtube_url: str):
+    """
+    Pobiera audio z filmu YouTube i konwertuje do formatu MP3, jeśli to konieczne.
+    
+    Funkcja waliduje URL YouTube, pobiera najlepszy dostępny format audio,
+    a następnie konwertuje do MP3 jeśli plik nie jest już w obsługiwanym formacie audio.
+    Obsługuje różne błędy pobierania i zapewnia szczegółowe komunikaty o błędach.
+    
+    Args:
+        youtube_url (str): URL filmu YouTube do pobrania
+    
+    Returns:
+        tuple: (file_data, file_extension)
+            - file_data (bytes): Zawartość pliku audio
+            - file_extension (str): Rozszerzenie pliku (np. '.mp3', '.wav')
+    
+    Raises:
+        ValueError: Gdy URL jest nieprawidłowy
+        RuntimeError: Gdy wystąpi błąd podczas pobierania lub konwersji
+        FileNotFoundError: Gdy nie znaleziono pliku audio
+    """
+    if not validate_youtube_url(youtube_url):
+        raise ValueError(
+            "Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube."
+        )
+
+    tmpdir = tempfile.mkdtemp(prefix="audio2tekst_yt_")
+    try:
+        output_template = str(Path(tmpdir) / "%(id)s.%(ext)s")
+        ydl_opts = {
+            "format": "bestaudio[ext=webm]/bestaudio",
+            "outtmpl": output_template,
+            "quiet": True,
+            "noplaylist": True,
+            "extractaudio": True,
+            "audioformat": "webm",
+            "prefer_ffmpeg": True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
+
+        for yt_file in Path(tmpdir).iterdir():
+            if yt_file.suffix.lower() in ALLOWED_EXT and yt_file.is_file():
+                # Jeśli plik jest już mp3 lub wav, zwróć bez konwersji
+                if yt_file.suffix.lower() in [".mp3", ".wav"]:
+                    file_data = yt_file.read_bytes()
+                    return file_data, yt_file.suffix.lower()
+                # W przeciwnym razie konwertuj do mp3
+                ffmpeg_deps = check_dependencies()
+                if not ffmpeg_deps["ffmpeg"]["available"]:
+                    raise RuntimeError(
+                        "FFmpeg nie jest dostępny – nie można przekonwertować do MP3."
                     )
-                    failed_audio_chunks.append(audio_chunk_file)
-                finally:
-                    try:
-                        if audio_chunk_file.exists():
-                            audio_chunk_file.unlink()
-                    except OSError as cleanup_exc:
-                        logger.warning(
-                            "Nie udało się usunąć pliku tymczasowego %s: %s",
-                            audio_chunk_file,
-                            cleanup_exc,
-                        )
-        return "\n".join(texts)
+                ffmpeg_bin = ffmpeg_deps["ffmpeg"]["path"]
+                yt_mp3_path = yt_file.with_suffix(".mp3")
+                ffmpeg_cmd = [ffmpeg_bin, "-y", "-i", str(yt_file), str(yt_mp3_path)]
+                try:
+                    subprocess.run(
+                        ffmpeg_cmd,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=True,
+                    )
+                except subprocess.CalledProcessError as conversion_exc:
+                    raise RuntimeError(
+                        f"Błąd konwersji do MP3: {conversion_exc}"
+                    ) from conversion_exc
+                if yt_mp3_path.exists():
+                    file_data = yt_mp3_path.read_bytes()
+                    return file_data, ".mp3"
+                else:
+                    raise RuntimeError("Konwersja do MP3 nie powiodła się.")
+        raise FileNotFoundError("Nie znaleziono pliku audio z YouTube")
 
-
-    def summarize(input_text: str, openai_client):
-        log_path = Path("logs/summary_errors.log")
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.info("Rozpoczynam summarize() - długość tekstu: %s znaków", len(input_text))
-        class OpenAIAPIError(Exception):
-            pass
+    except (OSError, FileNotFoundError, RuntimeError, KeyError) as exc:
+        error_msg = str(exc).lower()
+        if "is not a valid url" in error_msg or "invalid url" in error_msg:
+            raise ValueError(
+                "Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube."
+            ) from exc
+        elif "video unavailable" in error_msg or "private video" in error_msg:
+            raise RuntimeError(
+                "Film jest niedostępny lub prywatny. Spróbuj inny film YouTube."
+            ) from exc
+        elif "sign in" in error_msg or "age restricted" in error_msg:
+            raise RuntimeError(
+                "Film wymaga logowania lub jest ograniczony wiekowo. Spróbuj inny film YouTube."
+            ) from exc
+        elif "copyright" in error_msg or "blocked" in error_msg:
+            raise RuntimeError(
+                "Film jest zablokowany lub ma ograniczenia autorskie. Spróbuj inny film YouTube."
+            ) from exc
+        elif "network" in error_msg or "connection" in error_msg:
+            raise RuntimeError(
+                "Błąd połączenia z YouTube. Sprawdź połączenie internetowe i spróbuj ponownie."
+            ) from exc
+        else:
+            logger.error("Błąd podczas pobierania z YouTube: %s", str(exc))
+            raise RuntimeError(
+                "Wystąpił błąd podczas pobierania z YouTube. Sprawdź link i spróbuj ponownie."
+            ) from exc
+    finally:
         try:
-            MAX_CHUNK = 8000
-            if len(input_text) > MAX_CHUNK:
-                text_chunks = [input_text[i : i + MAX_CHUNK] for i in range(0, len(input_text), MAX_CHUNK)]
-                partial_summaries = []
-                for text_idx, text_chunk in enumerate(text_chunks):
-                    try:
-                        prompt = (
-                            f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami (fragment {text_idx+1}/{len(text_chunks)}):\n"
-                            + text_chunk
+            shutil.rmtree(tmpdir)
+        except OSError as cleanup_exc:
+            logger.warning(
+                "Nie udało się usunąć tymczasowego katalogu: %s", cleanup_exc
+            )
+
+
+def get_duration(file_path: Path) -> float:
+    """
+    Zwraca długość pliku audio/video w sekundach przy użyciu ffprobe.
+    
+    Funkcja wykorzystuje narzędzie ffprobe do analizy metadanych pliku
+    i wyciągnięcia informacji o długości trwania w sekundach.
+    
+    Args:
+        file_path (Path): Ścieżka do pliku audio/video
+    
+    Returns:
+        float: Długość pliku w sekundach
+    
+    Raises:
+        RuntimeError: Gdy ffprobe nie jest dostępne lub wystąpi błąd podczas analizy
+    """
+    # Sprawdź dostępność ffprobe
+    dependencies_info = check_dependencies()
+    if not dependencies_info["ffprobe"]["available"]:
+        raise RuntimeError("FFprobe nie jest dostępne w systemie. Zainstaluj FFmpeg.")
+
+    ffprobe_path = dependencies_info["ffprobe"]["path"]
+    ffprobe_cmd = [
+        ffprobe_path,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(file_path),
+    ]
+
+    try:
+        result = subprocess.run(  # nosec B603 # Bezpieczne wywołanie ffprobe z walidowanymi argumentami
+            ffprobe_cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,  # timeout dla bezpieczeństwa
+            check=True,
+        )
+        return float(result.stdout.strip())
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Przekroczono czas oczekiwania na analizę pliku") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"Błąd podczas analizy pliku: {exc}") from exc
+    except ValueError as exc:
+        raise RuntimeError(f"Nie można odczytać długości pliku: {exc}") from exc
+
+
+def split_audio(file_path: Path):
+    """
+    Dzieli długie pliki audio na mniejsze części do przetworzenia (chunking).
+    """
+    dependencies_info = check_dependencies()
+    if not dependencies_info["ffmpeg"]["available"]:
+        raise RuntimeError("FFmpeg nie jest dostępne w systemie. Zainstaluj FFmpeg.")
+    ffmpeg_exe_path = dependencies_info["ffmpeg"]["path"]
+    duration = get_duration(file_path)
+    seg_sec = CHUNK_MS / 1000
+    parts = []
+    for i in range(math.ceil(duration / seg_sec)):
+        start = i * seg_sec
+        length = seg_sec if (start + seg_sec) <= duration else (duration - start)
+        fd, tmp = tempfile.mkstemp(suffix=file_path.suffix, prefix="audio2tekst_")
+        os.close(fd)
+        tmp_path = Path(tmp)
+        ffmpeg_cmd = [
+            ffmpeg_exe_path, "-y", "-i", str(file_path), "-ss", str(start), "-t", str(length), "-c", "copy", str(tmp_path)
+        ]
+        try:
+            subprocess.run(
+                ffmpeg_cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=300,
+                check=True,
+                text=True,
+            )
+            parts.append(tmp_path)
+        except subprocess.TimeoutExpired as exc:
+            if tmp_path.exists():
+                tmp_path.unlink()
+            raise RuntimeError(f"Przekroczono czas oczekiwania podczas dzielenia pliku (segment {i+1})") from exc
+        except subprocess.CalledProcessError as exc:
+            if tmp_path.exists():
+                tmp_path.unlink()
+            logger.error("FFmpeg error: %s", exc.stderr)
+            raise RuntimeError(f"Błąd podczas dzielenia pliku (segment {i+1}): {exc}") from exc
+    return parts
+
+
+def clean_transcript(transcript_text: str) -> str:
+    """
+    Czyści transkrypcję z typowych artefaktów mowy.
+    """
+    cleaned_text = re.sub(r"\\b(?:em|yhm|um|uh|a{2,}|y{2,})\\b", "", transcript_text, flags=re.IGNORECASE)
+    cleaned_text = re.sub(r"\\s+", " ", cleaned_text)
+    return cleaned_text.strip()
+
+
+def transcribe_chunks(audio_chunks, openai_client):
+    texts = []
+    long_transcription_msg = "Plik audio poddawany transkrypcji jest bardzo duży. Potrzebuję więcej czasu. Cierpliwości..."
+    show_long_msg = [False]
+    empty_audio_chunks = []
+    failed_audio_chunks = []
+    def delayed_info():
+        time.sleep(10)
+        show_long_msg[0] = True
+        st.info(long_transcription_msg)
+    thread = threading.Thread(target=delayed_info)
+    thread.start()
+    with st.spinner("Transkrypcja w toku..."):
+        for audio_idx, audio_chunk_file in enumerate(audio_chunks):
+            chunk_size = audio_chunk_file.stat().st_size if audio_chunk_file.exists() else 0
+            # Zamiast st.info, dodaj do audio_info_msgs
+            st.session_state.setdefault('audio_info_msgs', []).append(
+                f"Fragment {audio_idx+1}/{len(audio_chunks)}: {audio_chunk_file} | Rozmiar: {chunk_size/1024:.1f} KB"
+            )
+            logger.info(
+                "Fragment %d: %s | Rozmiar: %d bajtów",
+                audio_idx + 1,
+                audio_chunk_file,
+                chunk_size,
+            )
+            if chunk_size == 0:
+                empty_audio_chunks.append(audio_chunk_file)
+                continue
+            try:
+                if chunk_size <= MAX_SIZE:
+                    with open(audio_chunk_file, "rb") as audio_file:
+                        transcript_text = openai_client.audio.transcriptions.create(
+                            model="whisper-1",
+                            file=audio_file,
+                            language="pl",
+                            response_format="text",
                         )
-                        completion = openai_client.chat.completions.create(
-                            model="gpt-3.5-turbo",
-                            messages=[{"role": "user", "content": prompt}],
-                            max_tokens=300,
-                        )
-                        if completion and completion.choices and completion.choices[0].message:
-                            content = completion.choices[0].message.content
-                            partial_summaries.append(content)
-                        else:
-                            raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI")
-                    except (openai.OpenAIError, OpenAIAPIError) as exc:
-                        msg = f"Błąd fragmentu {text_idx+1}: {exc}\n"
-                        logger.error(msg)
-                        with open(log_path, "a", encoding="utf-8") as log_file:
-                            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-                        return "Błąd podczas podsumowywania fragmentu", str(exc)
-                if not partial_summaries:
-                    return (
-                        "Nie udało się wygenerować podsumowania",
-                        "Brak podsumowań fragmentów.",
-                    )
+                        cleaned_transcript = clean_transcript(str(transcript_text))
+                        if not cleaned_transcript.strip():
+                            failed_audio_chunks.append(audio_chunk_file)
+                        texts.append(cleaned_transcript)
+                else:
+                    failed_audio_chunks.append(audio_chunk_file)
+            except (OSError, openai.OpenAIError) as exc:
+                logger.error(
+                    "Błąd podczas transkrypcji fragmentu %s: %s",
+                    audio_chunk_file,
+                    str(exc),
+                )
+                failed_audio_chunks.append(audio_chunk_file)
+            finally:
                 try:
-                    final_prompt = (
-                        "Oto podsumowania fragmentów długiego tekstu. Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n"
-                        + "\n".join(partial_summaries)
+                    if audio_chunk_file.exists():
+                        audio_chunk_file.unlink()
+                except OSError as cleanup_exc:
+                    logger.warning(
+                        "Nie udało się usunąć pliku tymczasowego %s: %s",
+                        audio_chunk_file,
+                        cleanup_exc,
                     )
-                    completion = openai_client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=[{"role": "user", "content": final_prompt}],
-                        max_tokens=300,
-                    )
-                    if completion and completion.choices and completion.choices[0].message:
-                        content = completion.choices[0].message.content
-                        lines = content.splitlines() if content else []
-                        final_topic = lines[0] if lines else "Nie udało się wygenerować tematu"
-                        final_summary = " ".join(lines[1:]) if len(lines) > 1 else "Nie udało się wygenerować podsumowania"
-                        return final_topic, final_summary
-                    else:
-                        raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (final)")
-                except (openai.OpenAIError, OpenAIAPIError) as exc:
-                    msg = f"Błąd końcowego podsumowania: {exc}\n"
-                    logger.error(msg)
-                    with open(log_path, "a", encoding="utf-8") as log_file:
-                        log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-                    return "Błąd podczas generowania końcowego podsumowania", str(exc)
-            else:
+    return "\n".join(texts)
+
+
+def summarize(input_text: str, openai_client):
+    log_path = Path("logs/summary_errors.log")
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logger.info("Rozpoczynam summarize() - długość tekstu: %s znaków", len(input_text))
+    class OpenAIAPIError(Exception):
+        pass
+    try:
+        MAX_CHUNK = 8000
+        if len(input_text) > MAX_CHUNK:
+            text_chunks = [input_text[i : i + MAX_CHUNK] for i in range(0, len(input_text), MAX_CHUNK)]
+            partial_summaries = []
+            for text_idx, text_chunk in enumerate(text_chunks):
                 try:
-                    prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + input_text
+                    prompt = (
+                        f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami (fragment {text_idx+1}/{len(text_chunks)}):\n"
+                        + text_chunk
+                    )
                     completion = openai_client.chat.completions.create(
                         model="gpt-3.5-turbo",
                         messages=[{"role": "user", "content": prompt}],
@@ -711,34 +676,82 @@ if source_option == "Plik lokalny":
                     )
                     if completion and completion.choices and completion.choices[0].message:
                         content = completion.choices[0].message.content
-                        lines = content.splitlines() if content else []
-                        short_topic = lines[0] if lines else "Nie udało się wygenerować tematu"
-                        short_summary = " ".join(lines[1:]) if len(lines) > 1 else "Nie udało się wygenerować podsumowania"
-                        return short_topic, short_summary
+                        partial_summaries.append(content)
                     else:
-                        raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (krótki tekst)")
+                        raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI")
                 except (openai.OpenAIError, OpenAIAPIError) as exc:
-                    msg = f"Błąd podsumowania krótkiego tekstu: {exc}\n"
+                    msg = f"Błąd fragmentu {text_idx+1}: {exc}\n"
                     logger.error(msg)
                     with open(log_path, "a", encoding="utf-8") as log_file:
                         log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-                    return "Błąd podczas podsumowywania tekstu", str(exc)
-        except (openai.OpenAIError, OpenAIAPIError) as exc:
-            if (
-                "insufficient_quota" in str(exc).lower()
-                or "you exceeded your current quota" in str(exc).lower()
-                or "error code: 429" in str(exc).lower()
-            ):
-                return "Brak środków na koncie OpenAI", str(exc)
-            msg = f"Błąd ogólny podsumowania: {exc}\n"
-            logger.error(msg)
-            with open(log_path, "a", encoding="utf-8") as log_file:
-                log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-            return "Błąd ogólny podczas podsumowywania", str(exc)
-        return (
-            "Nie udało się wygenerować podsumowania",
-            "Spróbuj ponownie lub skontaktuj się z administratorem",
-        )
+                    return "Błąd podczas podsumowywania fragmentu", str(exc)
+            if not partial_summaries:
+                return (
+                    "Nie udało się wygenerować podsumowania",
+                    "Brak podsumowań fragmentów.",
+                )
+            try:
+                final_prompt = (
+                    "Oto podsumowania fragmentów długiego tekstu. Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n"
+                    + "\n".join(partial_summaries)
+                )
+                completion = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": final_prompt}],
+                    max_tokens=300,
+                )
+                if completion and completion.choices and completion.choices[0].message:
+                    content = completion.choices[0].message.content
+                    lines = content.splitlines() if content else []
+                    final_topic = lines[0] if lines else "Nie udało się wygenerować tematu"
+                    final_summary = " ".join(lines[1:]) if len(lines) > 1 else "Nie udało się wygenerować podsumowania"
+                    return final_topic, final_summary
+                else:
+                    raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (final)")
+            except (openai.OpenAIError, OpenAIAPIError) as exc:
+                msg = f"Błąd końcowego podsumowania: {exc}\n"
+                logger.error(msg)
+                with open(log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                return "Błąd podczas generowania końcowego podsumowania", str(exc)
+        else:
+            try:
+                prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + input_text
+                completion = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                )
+                if completion and completion.choices and completion.choices[0].message:
+                    content = completion.choices[0].message.content
+                    lines = content.splitlines() if content else []
+                    short_topic = lines[0] if lines else "Nie udało się wygenerować tematu"
+                    short_summary = " ".join(lines[1:]) if len(lines) > 1 else "Nie udało się wygenerować podsumowania"
+                    return short_topic, short_summary
+                else:
+                    raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (krótki tekst)")
+            except (openai.OpenAIError, OpenAIAPIError) as exc:
+                msg = f"Błąd podsumowania krótkiego tekstu: {exc}\n"
+                logger.error(msg)
+                with open(log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                return "Błąd podczas podsumowywania tekstu", str(exc)
+    except (openai.OpenAIError, OpenAIAPIError) as exc:
+        if (
+            "insufficient_quota" in str(exc).lower()
+            or "you exceeded your current quota" in str(exc).lower()
+            or "error code: 429" in str(exc).lower()
+        ):
+            return "Brak środków na koncie OpenAI", str(exc)
+        msg = f"Błąd ogólny podsumowania: {exc}\n"
+        logger.error(msg)
+        with open(log_path, "a", encoding="utf-8") as log_file:
+            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+        return "Błąd ogólny podczas podsumowywania", str(exc)
+    return (
+        "Nie udało się wygenerować podsumowania",
+        "Spróbuj ponownie lub skontaktuj się z administratorem",
+    )
 
 
 # --- Ekran powitalny i opis aplikacji na samej górze strony ---
@@ -804,3 +817,211 @@ with st.sidebar.expander("🎵 Informacje o audio", expanded=False):
 # ...
 # except ValueError as e:
 #     youtube_url_error_placeholder.warning(f"⚠️ {str(e)}")
+
+# --- Główna logika aplikacji: obsługa plików lokalnych i YouTube ---
+
+# Zmienna do przechowywania danych pliku i rozszerzenia
+file_data = None
+file_ext = None
+file_source = None
+
+# Obsługa pliku lokalnego
+if source_option == "Plik lokalny":
+    if audio_file is not None:
+        if audio_file.size > MAX_SIZE:
+            st.error(f"⚠️ Plik jest za duży! Maksymalny rozmiar to {MAX_SIZE/1024/1024:.1f} MB")
+        else:
+            file_ext = Path(audio_file.name).suffix.lower()
+            if file_ext not in ALLOWED_EXT:
+                st.error(f"⚠️ Nieobsługiwany format pliku: {file_ext}")
+            else:
+                file_data = audio_file.read()
+                file_source = "lokalny"
+                st.success(f"✅ Plik załadowany: {audio_file.name} ({len(file_data)/1024:.1f} KB)")
+
+# Obsługa YouTube
+elif source_option == "YouTube":
+    if youtube_url and youtube_url.strip():
+        if validate_youtube_url(youtube_url.strip()):
+            with st.spinner("🎵 Pobieranie audio z YouTube..."):
+                try:
+                    file_data, file_ext = download_youtube_audio(youtube_url.strip())
+                    file_source = "YouTube"
+                    st.success(f"✅ Audio pobrane z YouTube ({len(file_data)/1024:.1f} KB, format: {file_ext})")
+                except ValueError as e:
+                    st.error(f"⚠️ Błąd URL: {str(e)}")
+                except RuntimeError as e:
+                    st.error(f"⚠️ Błąd pobierania: {str(e)}")
+                except Exception as e:
+                    st.error(f"⚠️ Nieoczekiwany błąd: {str(e)}")
+                    logger.error("Błąd pobierania z YouTube: %s", str(e))
+        else:
+            st.sidebar.error("⚠️ Wprowadź prawidłowy adres YouTube")
+
+# Przetwarzanie pliku (jeśli mamy dane)
+if file_data is not None and file_ext is not None:
+    try:
+        # Inicjalizacja ścieżek plików
+        file_uid, orig_path, transcript_path, summary_path = init_paths(file_data, file_ext)
+        
+        # Wyświetlanie informacji o pliku
+        st.markdown("---")
+        st.markdown("### 📁 Informacje o pliku")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Źródło", file_source)
+        with col2:
+            st.metric("Rozmiar", f"{len(file_data)/1024:.1f} KB")
+        with col3:
+            st.metric("Format", file_ext.upper())
+        
+        # Odtwarzacz audio
+        st.markdown("### 🎵 Podgląd audio")
+        st.audio(file_data, format=f"audio/{file_ext[1:]}")
+        
+        # Przycisk pobierania audio (bezpośrednio pod odtwarzaczem)
+        if file_ext.lower() in [".mp4", ".mov", ".avi", ".webm"]:
+            download_label = "Pobierz audio (MP3)"
+            download_filename = f"{file_uid}.mp3"
+        else:
+            download_label = "Pobierz audio"
+            download_filename = f"{file_uid}{file_ext}"
+        
+        st.download_button(
+            label=f"⬇️ {download_label}",
+            data=file_data,
+            file_name=download_filename,
+            mime=f"audio/{file_ext[1:] if file_ext != '.mp4' else 'mp3'}"
+        )
+        
+        # Sekcja transkrypcji
+        st.markdown("---")
+        st.markdown("### 📝 Transkrypcja")
+        
+        # Sprawdzenie czy transkrypcja już istnieje
+        if transcript_path.exists():
+            transcript_text = transcript_path.read_text(encoding=get_safe_encoding())
+            st.success("✅ Znaleziono istniejącą transkrypcję!")
+        else:
+            transcript_text = None
+            
+        # Przycisk transkrypcji
+        if st.button("🎯 Transkrybuj audio", type="primary", disabled=(transcript_text is not None)):
+            if transcript_text is not None:
+                st.info("ℹ️ Transkrypcja już została wykonana.")
+            else:
+                try:
+                    with st.spinner("📝 Transkrypcja w toku..."):
+                        # Sprawdzenie długości pliku
+                        duration = get_duration(orig_path)
+                        st.info(f"📊 Długość pliku: {duration/60:.1f} minut")
+                        
+                        # Podział na fragmenty jeśli plik jest długi
+                        if duration > CHUNK_MS / 1000:
+                            st.info("📊 Plik zostanie podzielony na fragmenty do przetworzenia...")
+                            audio_chunks = split_audio(orig_path)
+                            transcript_text = transcribe_chunks(audio_chunks, client)
+                        else:
+                            # Transkrypcja całego pliku
+                            with open(orig_path, "rb") as audio_file:
+                                transcript_response = client.audio.transcriptions.create(
+                                    model="whisper-1",
+                                    file=audio_file,
+                                    language="pl",
+                                    response_format="text"
+                                )
+                                transcript_text = clean_transcript(str(transcript_response))
+                        
+                        # Zapis transkrypcji
+                        if transcript_text and transcript_text.strip():
+                            transcript_path.write_text(transcript_text, encoding=get_safe_encoding())
+                            st.success("✅ Transkrypcja została wykonana pomyślnie!")
+                        else:
+                            st.error("⚠️ Nie udało się wygenerować transkrypcji.")
+                            transcript_text = None
+                            
+                except Exception as e:
+                    st.error(f"⚠️ Błąd podczas transkrypcji: {str(e)}")
+                    logger.error("Błąd transkrypcji: %s", str(e))
+                    transcript_text = None
+        
+        # Wyświetlanie i edycja transkrypcji
+        if transcript_text:
+            st.markdown("#### 📋 Wynik transkrypcji")
+            edited_transcript = st.text_area(
+                "Edytuj transkrypcję (jeśli potrzeba):",
+                value=transcript_text,
+                height=200,
+                help="Możesz poprawić transkrypcję przed wygenerowaniem podsumowania."
+            )
+            
+            # Przycisk pobierania transkrypcji
+            st.download_button(
+                label="⬇️ Pobierz transkrypcję",
+                data=edited_transcript,
+                file_name=f"transkrypcja_{file_uid}.txt",
+                mime="text/plain"
+            )
+            
+            # Sekcja podsumowania
+            st.markdown("---")
+            st.markdown("### 🤖 Podsumowanie AI")
+            
+            # Sprawdzenie czy podsumowanie już istnieje
+            if summary_path.exists():
+                summary_content = summary_path.read_text(encoding=get_safe_encoding())
+                st.success("✅ Znaleziono istniejące podsumowanie!")
+                st.markdown("#### 📊 Wynik podsumowania")
+                st.markdown(summary_content)
+                
+                # Przycisk pobierania podsumowania
+                st.download_button(
+                    label="⬇️ Pobierz podsumowanie",
+                    data=summary_content,
+                    file_name=f"podsumowanie_{file_uid}.txt",
+                    mime="text/plain"
+                )
+            else:
+                # Przycisk generowania podsumowania
+                if st.button("🧠 Wygeneruj podsumowanie", type="secondary"):
+                    if not edited_transcript.strip():
+                        st.error("⚠️ Brak tekstu do podsumowania.")
+                    else:
+                        try:
+                            with st.spinner("🤖 Generowanie podsumowania..."):
+                                topic, summary = summarize(edited_transcript, client)
+                                
+                                if topic and summary:
+                                    summary_content = f"**Temat:** {topic}\n\n**Podsumowanie:** {summary}"
+                                    summary_path.write_text(summary_content, encoding=get_safe_encoding())
+                                    
+                                    st.success("✅ Podsumowanie zostało wygenerowane!")
+                                    st.markdown("#### 📊 Wynik podsumowania")
+                                    st.markdown(summary_content)
+                                    
+                                    # Przycisk pobierania podsumowania
+                                    st.download_button(
+                                        label="⬇️ Pobierz podsumowanie",
+                                        data=summary_content,
+                                        file_name=f"podsumowanie_{file_uid}.txt",
+                                        mime="text/plain"
+                                    )
+                                else:
+                                    st.error("⚠️ Nie udało się wygenerować podsumowania.")
+                                    
+                        except Exception as e:
+                            st.error(f"⚠️ Błąd podczas generowania podsumowania: {str(e)}")
+                            logger.error("Błąd podsumowania: %s", str(e))
+    
+    except Exception as e:
+        st.error(f"⚠️ Błąd podczas przetwarzania pliku: {str(e)}")
+        logger.error("Błąd przetwarzania pliku: %s", str(e))
+
+else:
+    # Komunikat gdy nie ma pliku do przetworzenia
+    if source_option == "Plik lokalny":
+        st.info("📁 Wybierz plik audio lub video z panelu bocznego, aby rozpocząć transkrypcję.")
+    elif source_option == "YouTube":
+        st.info("🎵 Wklej adres YouTube w panelu bocznym, aby pobrać i transkrybować audio.")
+
+# --- Ekran powitalny i opis aplikacji na samej górze strony ---
