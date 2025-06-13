@@ -1,11 +1,19 @@
 # 📼 Audio2Tekst 📝
 
+<div align="center">
+  <img src="Screenshots/Okładka.png" alt="Audio2Tekst - Profesjonalne narzędzie do transkrypcji audio i video" width="800"/>
+</div>
+
+<div align="center">
+
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.45.0-red.svg)](https://streamlit.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Cross-Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green.svg)](https://github.com/AlanSteinbarth/Audio2Tekst)
 [![Code Quality](https://github.com/AlanSteinbarth/Audio2Tekst/workflows/Code%20Quality/badge.svg)](https://github.com/AlanSteinbarth/Audio2Tekst/actions)
 [![Security](https://github.com/AlanSteinbarth/Audio2Tekst/workflows/Security/badge.svg)](https://github.com/AlanSteinbarth/Audio2Tekst/actions)
+
+</div>
 
 > **Profesjonalne narzędzie do transkrypcji audio i video na tekst z automatycznym podsumowaniem**  
 > **🌍 Uniwersalna kompatybilność z Windows, macOS i Linux**
