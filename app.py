@@ -793,6 +793,29 @@ with st.sidebar.expander("ℹ️ Informacje o systemie", expanded=False):
     st.write("**Obsługiwane formaty:**", ", ".join(ALLOWED_EXT))
     st.write("**Maksymalny rozmiar:**", f"{MAX_SIZE/1024/1024:.1f} MB")
     st.write("**Długość fragmentu:**", f"{CHUNK_MS/1000/60:.0f} minut")
+    # Przycisk czyszczenia pamięci aplikacji
+    if st.button("Wyczyść pamięć aplikacji (audio, transkrypcje, logi)"):
+        for folder in ("originals", "transcripts", "summaries"):
+            folder_path = BASE_DIR / folder
+            if folder_path.exists():
+                for file in folder_path.iterdir():
+                    try:
+                        file.unlink()
+                    except Exception as e:
+                        st.warning(f"Nie udało się usunąć pliku: {file} ({e})")
+        logs_path = Path("logs")
+        if logs_path.exists():
+            for file in logs_path.iterdir():
+                try:
+                    file.unlink()
+                except Exception as e:
+                    st.warning(f"Nie udało się usunąć logu: {file} ({e})")
+        for key in list(st.session_state.keys()):
+            if key not in ("api_key", "api_key_verified"):
+                del st.session_state[key]
+        st.success("Pamięć aplikacji, transkrypcje i logi zostały wyczyszczone!")
+        time.sleep(1)
+        st.rerun()
 
 with st.sidebar.expander("🎵 Informacje o audio", expanded=False):
     if 'audio_info_msgs' in st.session_state:
@@ -846,15 +869,22 @@ if source_option == "Plik lokalny":
 elif source_option == "YouTube":
     if youtube_url and youtube_url.strip():
         if validate_youtube_url(youtube_url.strip()):
+            # Inicjalizuj info przed pobraniem (czyści tylko jeśli zmieniono adres)
+            if (
+                'audio_info_msgs' not in st.session_state
+                or not st.session_state['audio_info_msgs']
+                or st.session_state['audio_info_msgs'][0] != f"YouTube: {youtube_url.strip()}"
+            ):
+                st.session_state['audio_info_msgs'] = []
             with st.spinner("Pobieranie audio z YouTube..."):
                 try:
                     file_data, file_ext = download_youtube_audio(youtube_url.strip())
                     file_source = "YouTube"
-                    # Dodaj info do sidebaru
-                    st.session_state.setdefault('audio_info_msgs', []).clear()
-                    st.session_state['audio_info_msgs'].append(f"Źródło: YouTube")
-                    st.session_state['audio_info_msgs'].append(f"Rozmiar: {len(file_data)/1024:.1f} KB")
-                    st.session_state['audio_info_msgs'].append(f"Format: {file_ext.upper()}")
+                    st.session_state['audio_info_msgs'] = [
+                        "Źródło: YouTube",
+                        f"Rozmiar: {len(file_data)/1024:.1f} KB",
+                        f"Format: {file_ext.upper()}"
+                    ]
                 except ValueError as e:
                     st.error(f"Błąd URL: {str(e)}")
                 except RuntimeError as e:
@@ -1021,30 +1051,3 @@ else:
         st.info("Wklej adres YouTube w panelu bocznym, aby pobrać i transkrybować audio.")
 
 # --- Ekran powitalny i opis aplikacji na samej górze strony ---
-
-# --- Przycisk czyszczenia pamięci aplikacji, logów i transkrypcji ---
-with st.sidebar.expander("🧹 Narzędzia administracyjne", expanded=False):
-    if st.button("Wyczyść pamięć aplikacji (audio, transkrypcje, logi)"):
-        # Czyszczenie katalogów uploads/originals, uploads/transcripts, uploads/summaries
-        for folder in ("originals", "transcripts", "summaries"):
-            folder_path = BASE_DIR / folder
-            if folder_path.exists():
-                for file in folder_path.iterdir():
-                    try:
-                        file.unlink()
-                    except Exception as e:
-                        st.warning(f"Nie udało się usunąć pliku: {file} ({e})")
-        # Czyszczenie katalogu logs
-        logs_path = Path("logs")
-        if logs_path.exists():
-            for file in logs_path.iterdir():
-                try:
-                    file.unlink()
-                except Exception as e:
-                    st.warning(f"Nie udało się usunąć logu: {file} ({e})")
-        # Czyszczenie session_state
-        for key in list(st.session_state.keys()):
-            if key not in ("api_key", "api_key_verified"):
-                del st.session_state[key]
-        st.success("Pamięć aplikacji, transkrypcje i logi zostały wyczyszczone!")
-        st.rerun()
