@@ -253,13 +253,11 @@ if not st.session_state.api_key_verified:
 st.sidebar.success("Klucz OpenAI API zweryfikowany! Możesz korzystać z funkcji aplikacji.")
 
 # Okno wyboru źródła audio: lokalny plik lub YouTube
-st.sidebar.markdown("#### Wybierz źródło audio:")
 source_option = st.sidebar.radio(
-    label="",  # Brak labela, by nie generować dodatkowej przerwy
+    label="Wybierz źródło:",
     options=["Plik lokalny", "YouTube"],
     index=0,
     horizontal=False,
-    # Ustawienia stylu przez markdown, by nie było dodatkowego marginesu
 )
 
 # Inicjalizacja zmiennych
@@ -273,6 +271,7 @@ if source_option == "Plik lokalny":
         accept_multiple_files=False,
         help="Obsługiwane formaty: mp3, wav, m4a, mp4, mov, avi, webm. Maksymalny rozmiar: 25MB."
     )
+    st.sidebar.markdown("---")
 
 if source_option == "YouTube":
     youtube_url = st.sidebar.text_input(
@@ -281,6 +280,7 @@ if source_option == "YouTube":
         key="youtube_url_input",
         help="Wklej pełny adres filmu z YouTube."
     )
+    st.sidebar.markdown("---")
 
 # --- Klucz API zweryfikowany, inicjalizacja klienta i główna aplikacja ---
 try:
@@ -759,10 +759,8 @@ st.markdown("""
 <div style='display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 0;'>
     <h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0.5em;'>📼 Audio2Tekst 📝</h1>
     <p style='text-align: center; font-size: 1.1rem; max-width: 600px; margin: 0 auto; color: #444;'>
-        Profesjonalny konwerter audio na tekst wykorzystujący OpenAI Whisper.<br>
-        Wspiera 90+ języków, batch processing, eksport do różnych formatów (TXT, DOCX, PDF).<br>
-        GUI z drag&drop, progress tracking i opcjami konfiguracji jakości transkrypcji.<br>
-        Idealny dla dziennikarzy, studentów i twórców treści.
+        Szybka transkrypcja plików audio i YouTube na tekst.<br>
+        Prosto. Bez zbędnych opcji.
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -837,26 +835,35 @@ if source_option == "Plik lokalny":
             else:
                 file_data = audio_file.read()
                 file_source = "lokalny"
-                st.success(f"✅ Plik załadowany: {audio_file.name} ({len(file_data)/1024:.1f} KB)")
+                # Dodaj info do sidebaru
+                st.session_state.setdefault('audio_info_msgs', []).clear()
+                st.session_state['audio_info_msgs'].append(f"Źródło: Plik lokalny")
+                st.session_state['audio_info_msgs'].append(f"Nazwa: {audio_file.name}")
+                st.session_state['audio_info_msgs'].append(f"Rozmiar: {len(file_data)/1024:.1f} KB")
+                st.session_state['audio_info_msgs'].append(f"Format: {file_ext.upper()}")
 
 # Obsługa YouTube
 elif source_option == "YouTube":
     if youtube_url and youtube_url.strip():
         if validate_youtube_url(youtube_url.strip()):
-            with st.spinner("🎵 Pobieranie audio z YouTube..."):
+            with st.spinner("Pobieranie audio z YouTube..."):
                 try:
                     file_data, file_ext = download_youtube_audio(youtube_url.strip())
                     file_source = "YouTube"
-                    st.success(f"✅ Audio pobrane z YouTube ({len(file_data)/1024:.1f} KB, format: {file_ext})")
+                    # Dodaj info do sidebaru
+                    st.session_state.setdefault('audio_info_msgs', []).clear()
+                    st.session_state['audio_info_msgs'].append(f"Źródło: YouTube")
+                    st.session_state['audio_info_msgs'].append(f"Rozmiar: {len(file_data)/1024:.1f} KB")
+                    st.session_state['audio_info_msgs'].append(f"Format: {file_ext.upper()}")
                 except ValueError as e:
-                    st.error(f"⚠️ Błąd URL: {str(e)}")
+                    st.error(f"Błąd URL: {str(e)}")
                 except RuntimeError as e:
-                    st.error(f"⚠️ Błąd pobierania: {str(e)}")
+                    st.error(f"Błąd pobierania: {str(e)}")
                 except Exception as e:
-                    st.error(f"⚠️ Nieoczekiwany błąd: {str(e)}")
+                    st.error(f"Nieoczekiwany błąd: {str(e)}")
                     logger.error("Błąd pobierania z YouTube: %s", str(e))
         else:
-            st.sidebar.error("⚠️ Wprowadź prawidłowy adres YouTube")
+            st.sidebar.error("Wprowadź prawidłowy adres YouTube")
 
 # Przetwarzanie pliku (jeśli mamy dane)
 if file_data is not None and file_ext is not None:
@@ -864,19 +871,8 @@ if file_data is not None and file_ext is not None:
         # Inicjalizacja ścieżek plików
         file_uid, orig_path, transcript_path, summary_path = init_paths(file_data, file_ext)
         
-        # Wyświetlanie informacji o pliku
-        st.markdown("---")
-        st.markdown("### 📁 Informacje o pliku")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Źródło", file_source)
-        with col2:
-            st.metric("Rozmiar", f"{len(file_data)/1024:.1f} KB")
-        with col3:
-            st.metric("Format", file_ext.upper())
-        
         # Odtwarzacz audio
-        st.markdown("### 🎵 Podgląd audio")
+        st.markdown("### Podgląd audio")
         st.audio(file_data, format=f"audio/{file_ext[1:]}")
         
         # Przycisk pobierania audio (bezpośrednio pod odtwarzaczem)
@@ -888,7 +884,7 @@ if file_data is not None and file_ext is not None:
             download_filename = f"{file_uid}{file_ext}"
         
         st.download_button(
-            label=f"⬇️ {download_label}",
+            label=download_label,
             data=file_data,
             file_name=download_filename,
             mime=f"audio/{file_ext[1:] if file_ext != '.mp4' else 'mp3'}"
@@ -896,29 +892,29 @@ if file_data is not None and file_ext is not None:
         
         # Sekcja transkrypcji
         st.markdown("---")
-        st.markdown("### 📝 Transkrypcja")
+        st.markdown("### Transkrypcja")
         
         # Sprawdzenie czy transkrypcja już istnieje
         if transcript_path.exists():
             transcript_text = transcript_path.read_text(encoding=get_safe_encoding())
-            st.success("✅ Znaleziono istniejącą transkrypcję!")
+            st.success("Znaleziono istniejącą transkrypcję!")
         else:
             transcript_text = None
             
         # Przycisk transkrypcji
-        if st.button("🎯 Transkrybuj audio", type="primary", disabled=(transcript_text is not None)):
+        if st.button("Transkrybuj audio", type="primary", disabled=(transcript_text is not None)):
             if transcript_text is not None:
-                st.info("ℹ️ Transkrypcja już została wykonana.")
+                st.info("Transkrypcja już została wykonana.")
             else:
                 try:
-                    with st.spinner("📝 Transkrypcja w toku..."):
+                    with st.spinner("Transkrypcja w toku..."):
                         # Sprawdzenie długości pliku
                         duration = get_duration(orig_path)
-                        st.info(f"📊 Długość pliku: {duration/60:.1f} minut")
+                        st.info(f"Długość pliku: {duration/60:.1f} minut")
                         
                         # Podział na fragmenty jeśli plik jest długi
                         if duration > CHUNK_MS / 1000:
-                            st.info("📊 Plik zostanie podzielony na fragmenty do przetworzenia...")
+                            st.info("Plik zostanie podzielony na fragmenty do przetworzenia...")
                             audio_chunks = split_audio(orig_path)
                             transcript_text = transcribe_chunks(audio_chunks, client)
                         else:
@@ -935,19 +931,19 @@ if file_data is not None and file_ext is not None:
                         # Zapis transkrypcji
                         if transcript_text and transcript_text.strip():
                             transcript_path.write_text(transcript_text, encoding=get_safe_encoding())
-                            st.success("✅ Transkrypcja została wykonana pomyślnie!")
+                            st.success("Transkrypcja została wykonana pomyślnie!")
                         else:
-                            st.error("⚠️ Nie udało się wygenerować transkrypcji.")
+                            st.error("Nie udało się wygenerować transkrypcji.")
                             transcript_text = None
                             
                 except Exception as e:
-                    st.error(f"⚠️ Błąd podczas transkrypcji: {str(e)}")
+                    st.error(f"Błąd podczas transkrypcji: {str(e)}")
                     logger.error("Błąd transkrypcji: %s", str(e))
                     transcript_text = None
         
         # Wyświetlanie i edycja transkrypcji
         if transcript_text:
-            st.markdown("#### 📋 Wynik transkrypcji")
+            st.markdown("#### Wynik transkrypcji")
             edited_transcript = st.text_area(
                 "Edytuj transkrypcję (jeśli potrzeba):",
                 value=transcript_text,
@@ -957,7 +953,7 @@ if file_data is not None and file_ext is not None:
             
             # Przycisk pobierania transkrypcji
             st.download_button(
-                label="⬇️ Pobierz transkrypcję",
+                label="Pobierz transkrypcję",
                 data=edited_transcript,
                 file_name=f"transkrypcja_{file_uid}.txt",
                 mime="text/plain"
@@ -965,63 +961,90 @@ if file_data is not None and file_ext is not None:
             
             # Sekcja podsumowania
             st.markdown("---")
-            st.markdown("### 🤖 Podsumowanie AI")
+            st.markdown("### Podsumowanie AI")
             
             # Sprawdzenie czy podsumowanie już istnieje
             if summary_path.exists():
                 summary_content = summary_path.read_text(encoding=get_safe_encoding())
-                st.success("✅ Znaleziono istniejące podsumowanie!")
-                st.markdown("#### 📊 Wynik podsumowania")
+                st.success("Znaleziono istniejące podsumowanie!")
+                st.markdown("#### Wynik podsumowania")
                 st.markdown(summary_content)
                 
                 # Przycisk pobierania podsumowania
                 st.download_button(
-                    label="⬇️ Pobierz podsumowanie",
+                    label="Pobierz podsumowanie",
                     data=summary_content,
                     file_name=f"podsumowanie_{file_uid}.txt",
                     mime="text/plain"
                 )
             else:
                 # Przycisk generowania podsumowania
-                if st.button("🧠 Wygeneruj podsumowanie", type="secondary"):
+                if st.button("Wygeneruj podsumowanie", type="secondary"):
                     if not edited_transcript.strip():
-                        st.error("⚠️ Brak tekstu do podsumowania.")
+                        st.error("Brak tekstu do podsumowania.")
                     else:
                         try:
-                            with st.spinner("🤖 Generowanie podsumowania..."):
+                            with st.spinner("Generowanie podsumowania..."):
                                 topic, summary = summarize(edited_transcript, client)
                                 
                                 if topic and summary:
                                     summary_content = f"**Temat:** {topic}\n\n**Podsumowanie:** {summary}"
                                     summary_path.write_text(summary_content, encoding=get_safe_encoding())
                                     
-                                    st.success("✅ Podsumowanie zostało wygenerowane!")
-                                    st.markdown("#### 📊 Wynik podsumowania")
+                                    st.success("Podsumowanie zostało wygenerowane!")
+                                    st.markdown("#### Wynik podsumowania")
                                     st.markdown(summary_content)
                                     
                                     # Przycisk pobierania podsumowania
                                     st.download_button(
-                                        label="⬇️ Pobierz podsumowanie",
+                                        label="Pobierz podsumowanie",
                                         data=summary_content,
                                         file_name=f"podsumowanie_{file_uid}.txt",
                                         mime="text/plain"
                                     )
                                 else:
-                                    st.error("⚠️ Nie udało się wygenerować podsumowania.")
+                                    st.error("Nie udało się wygenerować podsumowania.")
                                     
                         except Exception as e:
-                            st.error(f"⚠️ Błąd podczas generowania podsumowania: {str(e)}")
+                            st.error(f"Błąd podczas generowania podsumowania: {str(e)}")
                             logger.error("Błąd podsumowania: %s", str(e))
     
     except Exception as e:
-        st.error(f"⚠️ Błąd podczas przetwarzania pliku: {str(e)}")
+        st.error(f"Błąd podczas przetwarzania pliku: {str(e)}")
         logger.error("Błąd przetwarzania pliku: %s", str(e))
 
 else:
     # Komunikat gdy nie ma pliku do przetworzenia
     if source_option == "Plik lokalny":
-        st.info("📁 Wybierz plik audio lub video z panelu bocznego, aby rozpocząć transkrypcję.")
+        st.info("Wybierz plik audio lub video z panelu bocznego, aby rozpocząć transkrypcję.")
     elif source_option == "YouTube":
-        st.info("🎵 Wklej adres YouTube w panelu bocznym, aby pobrać i transkrybować audio.")
+        st.info("Wklej adres YouTube w panelu bocznym, aby pobrać i transkrybować audio.")
 
 # --- Ekran powitalny i opis aplikacji na samej górze strony ---
+
+# --- Przycisk czyszczenia pamięci aplikacji, logów i transkrypcji ---
+with st.sidebar.expander("🧹 Narzędzia administracyjne", expanded=False):
+    if st.button("Wyczyść pamięć aplikacji (audio, transkrypcje, logi)"):
+        # Czyszczenie katalogów uploads/originals, uploads/transcripts, uploads/summaries
+        for folder in ("originals", "transcripts", "summaries"):
+            folder_path = BASE_DIR / folder
+            if folder_path.exists():
+                for file in folder_path.iterdir():
+                    try:
+                        file.unlink()
+                    except Exception as e:
+                        st.warning(f"Nie udało się usunąć pliku: {file} ({e})")
+        # Czyszczenie katalogu logs
+        logs_path = Path("logs")
+        if logs_path.exists():
+            for file in logs_path.iterdir():
+                try:
+                    file.unlink()
+                except Exception as e:
+                    st.warning(f"Nie udało się usunąć logu: {file} ({e})")
+        # Czyszczenie session_state
+        for key in list(st.session_state.keys()):
+            if key not in ("api_key", "api_key_verified"):
+                del st.session_state[key]
+        st.success("Pamięć aplikacji, transkrypcje i logi zostały wyczyszczone!")
+        st.rerun()
