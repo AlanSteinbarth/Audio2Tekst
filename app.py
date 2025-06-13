@@ -63,7 +63,7 @@ import streamlit.components.v1 as components
 
 # --- Konfiguracja logowania ---
 # Ustawiamy poziom logowania na INFO i tworzymy loggera
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, encoding="utf-8")
 logger = logging.getLogger(__name__)
 
 
@@ -201,8 +201,9 @@ if not st.session_state.api_key_verified:
     # --- Ekran początkowy przed weryfikacją klucza ---
     api_key_error_placeholder = st.sidebar.empty()
 
-    if st.session_state.api_key_error_message:
-        api_key_error_placeholder.error(st.session_state.api_key_error_message)
+    # USUŃ TĘ SEKCJĘ: nie wyświetlaj błędu na górze sidebaru
+    # if st.session_state.api_key_error_message:
+    #     api_key_error_placeholder.error(st.session_state.api_key_error_message)
 
     # Logika dla pola wprowadzania klucza
     # Jeśli klucz z .env był niepoprawny LUB jeśli nie ma klucza w .env
@@ -218,6 +219,10 @@ if not st.session_state.api_key_verified:
             on_change=lambda: setattr(st.session_state, 'api_key_input_changed', True)
         )
         st.session_state.current_input_key = user_api_key_input
+
+        # Komunikat o błędnym kluczu pod polem input
+        if st.session_state.api_key_error_message:
+            st.sidebar.warning(st.session_state.api_key_error_message)
 
         if st.session_state.api_key_input_changed:
             st.session_state.api_key_input_changed = False
@@ -248,14 +253,12 @@ if not st.session_state.api_key_verified:
     st.stop() # Zatrzymujemy resztę aplikacji, jeśli klucz nie jest zweryfikowany
 
 # --- Klucz API zweryfikowany, inicjalizacja klienta i główna aplikacja ---
-# Ta część kodu wykona się tylko, jeśli st.session_state.api_key_verified jest True
 try:
     client = openai.OpenAI(api_key=st.session_state.api_key)
-    # Można dodać tutaj mały test, np. st.sidebar.success("Klient OpenAI gotowy.")
 except Exception as e:  # nosec
     st.error(f"Nie udało się zainicjować klienta OpenAI po weryfikacji klucza: {e}")
     logger.error("Błąd inicjalizacji klienta OpenAI po weryfikacji: %s", e)
-    st.session_state.api_key_verified = False # Zresetuj weryfikację, aby użytkownik mógł spróbować ponownie
+    st.session_state.api_key_verified = False
     st.rerun()
 
 # --- Stałe i konfiguracja ścieżek ---

@@ -9,14 +9,23 @@ import tempfile
 import time
 from pathlib import Path
 from unittest.mock import Mock, patch
-
 import psutil
 import pytest
+import queue
+import threading
+import shutil
 
+# --- Funkcje pomocnicze do testów wydajnościowych ---
+def mock_youtube_download(url, timeout=30):
+    start_time = time.time()
+    time.sleep(0.1)
+    if time.time() - start_time > timeout:
+        raise TimeoutError("Download timeout")
+    return b"mock_audio_data"
 
+# --- Testy ---
 class TestPerformance:
     """Testy wydajności aplikacji."""
-
     def test_file_processing_time(self, sample_audio_data):
         """Test czasu przetwarzania plików."""
         # Symulacja przetwarzania pliku
@@ -68,9 +77,6 @@ class TestPerformance:
 
     def test_concurrent_processing(self, mock_openai_client):
         """Test współbieżnego przetwarzania."""
-        import queue
-        import threading
-
         results = queue.Queue()
 
         def mock_transcribe(file_id):
@@ -123,9 +129,6 @@ class TestScalability:
 
     def test_multiple_users_simulation(self, mock_openai_client):
         """Symulacja wielu użytkowników."""
-        import queue
-        import threading
-
         results = queue.Queue()
         errors = queue.Queue()
 
@@ -172,9 +175,6 @@ class TestResourceLimits:
 
     def test_api_rate_limiting(self, mock_openai_client):
         """Test symulacji limitów API."""
-        import time
-        from unittest.mock import Mock
-
         # Mock rate limiting
         call_times = []
 
@@ -197,8 +197,6 @@ class TestResourceLimits:
     def test_disk_space_monitoring(self, temp_dir):
         """Test monitorowania miejsca na dysku."""
         # Sprawdzenie dostępnego miejsca
-        import shutil
-
         total, used, free = shutil.disk_usage(temp_dir)
         free_gb = free / (1024**3)
 
@@ -263,24 +261,8 @@ class TestNetworkPerformance:
 
     def test_youtube_download_timeout(self):
         """Test timeout dla pobierania z YouTube."""
-        import time
-
-        def mock_youtube_download(url, timeout=30):
-            # Symulacja pobierania
-            start_time = time.time()
-            time.sleep(0.1)  # Symulacja czasu pobierania
-
-            if time.time() - start_time > timeout:
-                raise TimeoutError("Download timeout")
-
-            return b"mock_audio_data"
-
-        # Test successful download
         result = mock_youtube_download("https://youtube.com/watch?v=test", timeout=1)
         assert result == b"mock_audio_data"
-
-        # Test timeout (w prawdziwej implementacji)
-        # Tutaj nie testujemy timeout, bo to zajęłoby zbyt długo
 
     @patch("requests.post")
     def test_api_response_time(self, mock_post):
