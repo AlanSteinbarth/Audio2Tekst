@@ -59,7 +59,7 @@ import openai  # Klient OpenAI do transkrypcji i podsumowań
 import streamlit as st  # Framework do budowy interfejsu webowego
 import yt_dlp  # Narzędzie do pobierania audio z YouTube
 from dotenv import load_dotenv  # Ładowanie zmiennych środowiskowych z pliku .env
-from werkzeug.utils import secure_filename  # Bezpieczne operacje na nazwach plików
+import streamlit.components.v1 as components
 
 # --- Konfiguracja logowania ---
 # Ustawiamy poziom logowania na INFO i tworzymy loggera
@@ -138,6 +138,31 @@ def get_safe_encoding() -> str:
         return "utf-8"
 
 
+# Nowa funkcja do weryfikacji klucza
+def verify_api_key(key_to_verify: str) -> bool:
+    """Sprawdza poprawność klucza OpenAI API."""
+    if not key_to_verify:
+        st.session_state.api_key_error_message = "Klucz API nie może być pusty."
+        return False
+    try:
+        temp_client = openai.OpenAI(api_key=key_to_verify)
+        temp_client.models.list()  # Proste zapytanie testowe
+        st.session_state.api_key_error_message = "" # Wyczyszczenie błędu po sukcesie
+        return True
+    except openai.AuthenticationError:
+        st.session_state.api_key_error_message = "Nieprawidłowy klucz OpenAI API. Sprawdź, czy klucz jest poprawny i aktywny."
+        return False
+    except openai.RateLimitError:
+        st.session_state.api_key_error_message = "Przekroczono limit zapytań dla tego klucza API lub problem z subskrypcją."
+        return False
+    except openai.APIConnectionError:
+        st.session_state.api_key_error_message = "Błąd połączenia z serwerami OpenAI. Sprawdź swoje połączenie internetowe."
+        return False
+    except Exception as e:  # nosec
+        logger.error("Nieoczekiwany błąd podczas weryfikacji klucza API: %s", e)
+        st.session_state.api_key_error_message = f"Wystąpił nieoczekiwany błąd podczas weryfikacji klucza: {str(e)}"
+        return False
+
 # --- Konfiguracja Streamlit ---
 # Ustawienia strony i ładowanie zmiennych środowiskowych
 st.set_page_config(page_title="Audio2Tekst", layout="wide")
@@ -145,26 +170,98 @@ st.set_page_config(page_title="Audio2Tekst", layout="wide")
 load_dotenv()
 
 
-# --- Konfiguracja OpenAI ---
-def get_api_key():
-    """Pobiera klucz OpenAI API: najpierw z .env/środowiska, potem (opcjonalnie) z inputu użytkownika."""
-    env_key = os.getenv("OPENAI_API_KEY")
-    if env_key:
-        st.sidebar.success(
-            "Wykryto klucz OpenAI API w .env lub środowisku. Używany jest ten klucz."
+# Sprawdzenie klucza z .env przy pierwszym uruchomieniu, jeśli nie został jeszcze zweryfikowany
+# Ta logika zostanie uruchomiona tylko raz na sesję, chyba że api_key_verified zostanie zresetowane
+if not st.session_state.get("initial_env_key_check_done", False):
+    env_api_key = os.getenv("OPENAI_API_KEY")
+    if env_api_key:
+        st.session_state.api_key = env_api_key # Zapisz klucz z .env do stanu sesji
+        if verify_api_key(env_api_key):
+            st.session_state.api_key_verified = True
+            # Komunikat o sukcesie może być wyświetlony później, jeśli chcemy
+        else:
+            # Błąd jest już w st.session_state.api_key_error_message
+            # Ustawiamy, że klucz z .env był, ale jest niepoprawny
+            st.session_state.env_key_invalid = True 
+    st.session_state.initial_env_key_check_done = True
+
+if "env_key_invalid" not in st.session_state:
+    st.session_state.env_key_invalid = False
+
+# Główny interfejs aplikacji
+if not st.session_state.api_key_verified:
+    # --- Ekran początkowy przed weryfikacją klucza ---
+    st.markdown("""
+    <div style='display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh;'>
+        <h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0.5em;'>📼 Audio2Tekst 📝</h1>
+        <p style='text-align: center; font-size: 1.1rem; max-width: 600px; margin: 0 auto; color: #444;'>
+            Profesjonalny konwerter audio na tekst wykorzystujący OpenAI Whisper.<br>
+            Wspiera 90+ języków, batch processing, eksport do różnych formatów (TXT, DOCX, PDF).<br>
+            GUI z drag&drop, progress tracking i opcjami konfiguracji jakości transkrypcji.<br>
+            Idealny dla dziennikarzy, studentów i twórców treści.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.sidebar.title("Konfiguracja API")
+    api_key_error_placeholder = st.sidebar.empty()
+
+    if st.session_state.api_key_error_message:
+        api_key_error_placeholder.error(st.session_state.api_key_error_message)
+
+    # Logika dla pola wprowadzania klucza
+    # Jeśli klucz z .env był niepoprawny LUB jeśli nie ma klucza w .env
+    if st.session_state.env_key_invalid or not os.getenv("OPENAI_API_KEY"):
+        if st.session_state.env_key_invalid:
+            st.sidebar.warning("Klucz API z pliku .env jest nieprawidłowy lub wystąpił problem z jego weryfikacją.")
+
+        user_api_key_input = st.sidebar.text_input(
+            "Podaj swój OpenAI API Key:",
+            type="password",
+            key="user_api_key_input_field",
+            value=st.session_state.get("current_input_key", ""),
+            on_change=lambda: setattr(st.session_state, 'api_key_input_changed', True)
         )
-        return env_key
-    # Jeśli nie ma w środowisku, pokaż pole do wpisania
-    return st.sidebar.text_input("Podaj swój OpenAI API Key", type="password")
+        st.session_state.current_input_key = user_api_key_input
 
+        if st.session_state.api_key_input_changed:
+            st.session_state.api_key_input_changed = False
+            if user_api_key_input:
+                if verify_api_key(user_api_key_input):
+                    st.session_state.api_key = user_api_key_input
+                    st.session_state.api_key_verified = True
+                    st.session_state.env_key_invalid = False
+                    api_key_error_placeholder.empty()
+                    st.sidebar.success("Klucz OpenAI API został pomyślnie zweryfikowany.")
+                    st.rerun()
+                else:
+                    st.rerun()
+            elif not os.getenv("OPENAI_API_KEY"):
+                api_key_error_placeholder.warning("Brak klucza OpenAI API.\nWpisz go powyżej lub dodaj do pliku .env")
+                st.session_state.api_key_error_message = "Brak klucza OpenAI API.\nWpisz go powyżej lub dodaj do pliku .env"
+                st.rerun()
 
-api_key = get_api_key()
-if not api_key:
-    st.sidebar.warning(
-        "Brak klucza OpenAI API. Dodaj go do pliku .env lub wpisz powyżej."
-    )
-    st.stop()
-client = openai.OpenAI(api_key=api_key)
+    elif os.getenv("OPENAI_API_KEY") and not st.session_state.api_key_verified and not st.session_state.env_key_invalid:
+        # Ten przypadek jest, gdy klucz z .env jest, ale weryfikacja się nie powiodła z innego powodu (np. błąd sieci przy starcie)
+        # A nie jest to AuthenticationError (bo wtedy env_key_invalid byłoby True)
+        # Możemy po prostu wyświetlić błąd, który jest już w api_key_error_message
+        # I pozwolić na ponowną próbę lub wpisanie nowego klucza, tak jak wyżej.
+        # Dla uproszczenia, jeśli jest klucz w .env i nie jest zweryfikowany, ale nie jest env_key_invalid,
+        # zakładamy, że błąd jest już wyświetlony i czekamy na interakcję użytkownika lub poprawę sytuacji (np. sieć)
+        pass # Błąd powinien być już wyświetlony przez api_key_error_placeholder
+
+    st.stop() # Zatrzymujemy resztę aplikacji, jeśli klucz nie jest zweryfikowany
+
+# --- Klucz API zweryfikowany, inicjalizacja klienta i główna aplikacja ---
+# Ta część kodu wykona się tylko, jeśli st.session_state.api_key_verified jest True
+try:
+    client = openai.OpenAI(api_key=st.session_state.api_key)
+    # Można dodać tutaj mały test, np. st.sidebar.success("Klient OpenAI gotowy.")
+except Exception as e:  # nosec
+    st.error(f"Nie udało się zainicjować klienta OpenAI po weryfikacji klucza: {e}")
+    logger.error("Błąd inicjalizacji klienta OpenAI po weryfikacji: %s", e)
+    st.session_state.api_key_verified = False # Zresetuj weryfikację, aby użytkownik mógł spróbować ponownie
+    st.rerun()
 
 # --- Stałe i konfiguracja ścieżek ---
 # Tworzymy katalogi na pliki oryginalne, transkrypcje i podsumowania
@@ -416,21 +513,7 @@ def get_duration(file_path: Path) -> float:
 def split_audio(file_path: Path):
     """
     Dzieli długie pliki audio na mniejsze części do przetworzenia (chunking).
-    
-    Funkcja analizuje długość pliku audio i dzieli go na fragmenty o długości
-    określonej przez CHUNK_MS (domyślnie 5 minut). Każdy fragment jest zapisywany
-    jako oddzielny plik tymczasowy do dalszego przetwarzania przez OpenAI API.
-    
-    Args:
-        file_path (Path): Ścieżka do oryginalnego pliku audio/video
-    
-    Returns:
-        list[Path]: Lista ścieżek do plików fragmentów
-    
-    Raises:
-        RuntimeError: Gdy FFmpeg nie jest dostępne lub wystąpi błąd podczas dzielenia
     """
-    # Sprawdź dostępność ffmpeg
     dependencies_info = check_dependencies()
     if not dependencies_info["ffmpeg"]["available"]:
         raise RuntimeError("FFmpeg nie jest dostępne w systemie. Zainstaluj FFmpeg.")
@@ -438,36 +521,21 @@ def split_audio(file_path: Path):
     duration = get_duration(file_path)
     seg_sec = CHUNK_MS / 1000
     parts = []
-
     for i in range(math.ceil(duration / seg_sec)):
         start = i * seg_sec
         length = seg_sec if (start + seg_sec) <= duration else (duration - start)
-
-        # Utwórz tymczasowy plik w sposób bezpieczny dla wszystkich platform
         fd, tmp = tempfile.mkstemp(suffix=file_path.suffix, prefix="audio2tekst_")
         os.close(fd)
         tmp_path = Path(tmp)
-
         ffmpeg_cmd = [
-            ffmpeg_exe_path,
-            "-y",
-            "-i",
-            str(file_path),
-            "-ss",
-            str(start),
-            "-t",
-            str(length),
-            "-c",
-            "copy",
-            str(tmp_path),
+            ffmpeg_exe_path, "-y", "-i", str(file_path), "-ss", str(start), "-t", str(length), "-c", "copy", str(tmp_path)
         ]
-
         try:
-            subprocess.run(  # nosec B603 # Bezpieczne wywołanie ffmpeg z walidowanymi argumentami
+            subprocess.run(
                 ffmpeg_cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                timeout=300,  # 5 minut timeout
+                timeout=300,
                 check=True,
                 text=True,
             )
@@ -475,83 +543,41 @@ def split_audio(file_path: Path):
         except subprocess.TimeoutExpired as exc:
             if tmp_path.exists():
                 tmp_path.unlink()
-            raise RuntimeError(
-                f"Przekroczono czas oczekiwania podczas dzielenia pliku (segment {i+1})"
-            ) from exc
+            raise RuntimeError(f"Przekroczono czas oczekiwania podczas dzielenia pliku (segment {i+1})") from exc
         except subprocess.CalledProcessError as exc:
             if tmp_path.exists():
                 tmp_path.unlink()
             logger.error("FFmpeg error: %s", exc.stderr)
-            raise RuntimeError(
-                f"Błąd podczas dzielenia pliku (segment {i+1}): {exc}"
-            ) from exc
-
+            raise RuntimeError(f"Błąd podczas dzielenia pliku (segment {i+1}): {exc}") from exc
     return parts
 
 
 def clean_transcript(transcript_text: str) -> str:
     """
     Czyści transkrypcję z typowych artefaktów mowy.
-    
-    Usuwa często występujące w transkrypcjach słowa wypełniające
-    jak "um", "uh", "em", "yhm" oraz wielokrotnie powtarzające się litery.
-    Normalizuje białe znaki i usuwa nadmiarowe spacje.
-    
-    Args:
-        transcript_text (str): Surowa transkrypcja do wyczyszczenia
-    
-    Returns:
-        str: Wyczyszczona transkrypcja
     """
-    cleaned_text = re.sub(
-        r"\b(?:em|yhm|um|uh|a{2,}|y{2,})\b", "", transcript_text, flags=re.IGNORECASE
-    )
-    cleaned_text = re.sub(r"\s+", " ", cleaned_text)
+    cleaned_text = re.sub(r"\\b(?:em|yhm|um|uh|a{2,}|y{2,})\\b", "", transcript_text, flags=re.IGNORECASE)
+    cleaned_text = re.sub(r"\\s+", " ", cleaned_text)
     return cleaned_text.strip()
 
 
 def transcribe_chunks(audio_chunks, openai_client):
-    """
-    Transkrybuje podzielone fragmenty audio na tekst używając OpenAI Whisper API.
-    
-    Funkcja przetwarza listę fragmentów audio, wysyłając każdy do OpenAI Whisper API
-    w celu transkrypcji. Obsługuje długie pliki poprzez przetwarzanie fragmentów,
-    zapewnia szczegółową diagnostykę i obsługę błędów. Wyświetla postęp przetwarzania
-    i informuje o problemach z poszczególnymi fragmentami.
-    
-    Args:
-        audio_chunks (list[Path]): Lista ścieżek do fragmentów audio
-        openai_client: Klient OpenAI API
-    
-    Returns:
-        str: Połączona transkrypcja wszystkich fragmentów
-    
-    Features:
-        - Sprawdzanie rozmiaru fragmentów
-        - Czyszczenie transkrypcji z artefaktów
-        - Diagnostyka pustych/problematycznych fragmentów
-        - Automatyczne czyszczenie plików tymczasowych
-        - Komunikaty o postępie dla długich plików
-    """
     texts = []
     long_transcription_msg = "Plik audio poddawany transkrypcji jest bardzo duży. Potrzebuję więcej czasu. Cierpliwości..."
     show_long_msg = [False]
     empty_audio_chunks = []
     failed_audio_chunks = []
-
     def delayed_info():
         time.sleep(10)
         show_long_msg[0] = True
         st.info(long_transcription_msg)
-
     thread = threading.Thread(target=delayed_info)
     thread.start()
     with st.spinner("Transkrypcja w toku..."):
         for audio_idx, audio_chunk_file in enumerate(audio_chunks):
-            chunk_size = (
-                audio_chunk_file.stat().st_size if audio_chunk_file.exists() else 0
-            )
-            st.info(
+            chunk_size = audio_chunk_file.stat().st_size if audio_chunk_file.exists() else 0
+            # Zamiast st.info, dodaj do audio_info_msgs
+            st.session_state.setdefault('audio_info_msgs', []).append(
                 f"Fragment {audio_idx+1}/{len(audio_chunks)}: {audio_chunk_file} | Rozmiar: {chunk_size/1024:.1f} KB"
             )
             logger.info(
@@ -561,10 +587,6 @@ def transcribe_chunks(audio_chunks, openai_client):
                 chunk_size,
             )
             if chunk_size == 0:
-                st.warning(f"Fragment {audio_idx+1} jest pusty i zostaje pominięty.")
-                logger.warning(
-                    "Fragment %d (%s) jest pusty!", audio_idx + 1, audio_chunk_file
-                )
                 empty_audio_chunks.append(audio_chunk_file)
                 continue
             try:
@@ -578,25 +600,9 @@ def transcribe_chunks(audio_chunks, openai_client):
                         )
                         cleaned_transcript = clean_transcript(str(transcript_text))
                         if not cleaned_transcript.strip():
-                            st.warning(
-                                f"Fragment {audio_idx+1} nie został rozpoznany przez API (pusta odpowiedź)."
-                            )
-                            logger.warning(
-                                "Fragment %d (%s) – API zwróciło pustą odpowiedź.",
-                                audio_idx + 1,
-                                audio_chunk_file,
-                            )
                             failed_audio_chunks.append(audio_chunk_file)
                         texts.append(cleaned_transcript)
                 else:
-                    st.warning(
-                        f"Fragment {audio_idx+1} przekracza maksymalny rozmiar {MAX_SIZE/1024/1024:.1f} MB i zostaje pominięty."
-                    )
-                    logger.warning(
-                        "Fragment %d (%s) przekracza maksymalny rozmiar.",
-                        audio_idx + 1,
-                        audio_chunk_file,
-                    )
                     failed_audio_chunks.append(audio_chunk_file)
             except (OSError, openai.OpenAIError) as exc:
                 logger.error(
@@ -604,7 +610,6 @@ def transcribe_chunks(audio_chunks, openai_client):
                     audio_chunk_file,
                     str(exc),
                 )
-                st.error(f"Błąd podczas transkrypcji fragmentu {audio_idx+1}: {exc}")
                 failed_audio_chunks.append(audio_chunk_file)
             finally:
                 try:
@@ -616,596 +621,161 @@ def transcribe_chunks(audio_chunks, openai_client):
                         audio_chunk_file,
                         cleanup_exc,
                     )
-    # Diagnostyka po zakończeniu transkrypcji
-    if empty_audio_chunks:
-        st.warning(
-            f"Liczba pustych fragmentów: {len(empty_audio_chunks)}. Możesz pobrać problematyczne fragmenty do analizy poniżej."
-        )
-        for empty_idx, empty_chunk_file in enumerate(empty_audio_chunks):
-            if empty_chunk_file.exists():
-                st.download_button(
-                    f"Pobierz pusty fragment {empty_idx+1}",
-                    empty_chunk_file.read_bytes(),
-                    file_name=f"pusty_fragment_{empty_idx+1}{empty_chunk_file.suffix}",
-                )
-    if failed_audio_chunks:
-        st.warning(
-            f"Liczba fragmentów z błędem/pustą odpowiedzią: {len(failed_audio_chunks)}. Możesz pobrać problematyczne fragmenty do analizy poniżej."
-        )
-        for fail_idx, fail_chunk_file in enumerate(failed_audio_chunks):
-            if fail_chunk_file.exists():
-                st.download_button(
-                    f"Pobierz problematyczny fragment {fail_idx+1}",
-                    fail_chunk_file.read_bytes(),
-                    file_name=f"problem_fragment_{fail_idx+1}{fail_chunk_file.suffix}",
-                )
     return "\n".join(texts)
 
 
 def summarize(input_text: str, openai_client):
-    """
-    Generuje temat i podsumowanie z transkrypcji przy użyciu OpenAI GPT-3.5.
-    
-    Funkcja analizuje długość tekstu i automatycznie dzieli długie transkrypcje
-    na fragmenty, aby zmieścić się w limitach OpenAI API. Dla każdego fragmentu
-    generuje częściowe podsumowanie, a następnie tworzy finalne podsumowanie
-    z wszystkich części. Obsługuje różne błędy API i zapewnia szczegółowe logowanie.
-    
-    Args:
-        input_text (str): Tekst transkrypcji do podsumowania
-        openai_client: Klient OpenAI API
-    
-    Returns:
-        tuple: (topic, summary)
-            - topic (str): Temat w jednym zdaniu
-            - summary (str): Podsumowanie w 3-5 zdaniach
-    
-    Features:
-        - Automatyczne dzielenie długich tekstów (>8000 znaków)
-        - Hierarchiczne podsumowywanie (fragmenty → częściowe → finalne)
-        - Obsługa błędów quota/billing OpenAI
-        - Szczegółowe logowanie do pliku
-        - Komunikaty o postępie dla użytkownika
-    """
     log_path = Path("logs/summary_errors.log")
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    # Usunięto komunikat o długim tekście
     logger.info("Rozpoczynam summarize() - długość tekstu: %s znaków", len(input_text))
-
     class OpenAIAPIError(Exception):
-        """Własny wyjątek dla błędów OpenAI API."""
-
+        pass
     try:
-        MAX_CHUNK = 8000  # znaków na fragment (bezpieczny limit)
+        MAX_CHUNK = 8000
         if len(input_text) > MAX_CHUNK:
-            logger.info("Tekst jest długi - dzielę na fragmenty")
-            text_chunks = [
-                input_text[i : i + MAX_CHUNK]
-                for i in range(0, len(input_text), MAX_CHUNK)
-            ]
-            logger.info("Podzielono na %s fragmentów", len(text_chunks))
+            text_chunks = [input_text[i : i + MAX_CHUNK] for i in range(0, len(input_text), MAX_CHUNK)]
             partial_summaries = []
             for text_idx, text_chunk in enumerate(text_chunks):
-                logger.info(
-                    "Przetwarzam fragment %s/%s", text_idx + 1, len(text_chunks)
-                )
-                with st.spinner(
-                    f"Podsumowywanie fragmentu {text_idx+1}/{len(text_chunks)}..."
-                ):
-                    try:
-                        prompt = (
-                            f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami (fragment {text_idx+1}/{len(text_chunks)}):\n"
-                            + text_chunk
-                        )
-                        completion = openai_client.chat.completions.create(
-                            model="gpt-3.5-turbo",
-                            messages=[{"role": "user", "content": prompt}],
-                            max_tokens=300,
-                        )
-                        if (
-                            completion
-                            and completion.choices
-                            and completion.choices[0].message
-                        ):
-                            content = completion.choices[0].message.content
-                            partial_summaries.append(content)
-                        else:
-                            raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI")
-                    except (openai.OpenAIError, OpenAIAPIError) as exc:
-                        msg = f"Błąd fragmentu {text_idx+1}: {exc}\n"
-                        logger.error(msg)
-                        with open(log_path, "a", encoding="utf-8") as log_file:
-                            log_file.write(
-                                f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}"
-                            )
-                        st.error(
-                            f"Błąd podczas podsumowywania fragmentu {text_idx+1}: {exc}"
-                        )
-                        return "Błąd podczas podsumowywania fragmentu", str(exc)
-            logger.info("Zebrałem %s częściowych podsumowań", len(partial_summaries))
-            if not partial_summaries:
-                st.error(
-                    "Nie udało się wygenerować żadnego podsumowania fragmentów. Spróbuj ponownie lub sprawdź logi."
-                )
-                logger.error(
-                    "Brak partial_summaries - nie można wygenerować końcowego podsumowania."
-                )
-                return (
-                    "Nie udało się wygenerować podsumowania",
-                    "Brak podsumowań fragmentów.",
-                )
-            with st.spinner("Tworzenie końcowego podsumowania..."):
-                try:
-                    final_prompt = (
-                        "Oto podsumowania fragmentów długiego tekstu. Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n"
-                        + "\n".join(partial_summaries)
-                    )
-                    logger.info("Prompt do modelu (final): %s...", final_prompt[:200])
-                    completion = openai_client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=[{"role": "user", "content": final_prompt}],
-                        max_tokens=300,
-                    )
-                    if (
-                        completion
-                        and completion.choices
-                        and completion.choices[0].message
-                    ):
-                        content = completion.choices[0].message.content
-                        logger.info("Odpowiedź modelu (final): %s...", content[:200])
-                        lines = content.splitlines() if content else []
-                        final_topic = (
-                            lines[0] if lines else "Nie udało się wygenerować tematu"
-                        )
-                        final_summary = (
-                            " ".join(lines[1:])
-                            if len(lines) > 1
-                            else "Nie udało się wygenerować podsumowania"
-                        )
-                        logger.info(
-                            "Zwracam: topic='%s...', summary='%s...'",
-                            final_topic[:50],
-                            final_summary[:50],
-                        )
-                        return final_topic, final_summary
-                    else:
-                        logger.error("Brak odpowiedzi z modelu OpenAI (final)")
-                        raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (final)")
-                except (openai.OpenAIError, OpenAIAPIError) as exc:
-                    msg = f"Błąd końcowego podsumowania: {exc}\n"
-                    logger.error(msg)
-                    with open(log_path, "a", encoding="utf-8") as log_file:
-                        log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-                    st.error(f"Błąd podczas generowania końcowego podsumowania: {exc}")
-                    return "Błąd podczas generowania końcowego podsumowania", str(exc)
-        else:
-            logger.info("Tekst jest krótki - bezpośrednie podsumowanie")
-            with st.spinner("Podsumowywanie tekstu..."):
                 try:
                     prompt = (
-                        "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n"
-                        + input_text
+                        f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami (fragment {text_idx+1}/{len(text_chunks)}):\n"
+                        + text_chunk
                     )
                     completion = openai_client.chat.completions.create(
                         model="gpt-3.5-turbo",
                         messages=[{"role": "user", "content": prompt}],
                         max_tokens=300,
                     )
-                    if (
-                        completion
-                        and completion.choices
-                        and completion.choices[0].message
-                    ):
+                    if completion and completion.choices and completion.choices[0].message:
                         content = completion.choices[0].message.content
-                        logger.info(
-                            "Otrzymano krótkie podsumowanie: %s...", content[:100]
-                        )
-                        lines = content.splitlines() if content else []
-                        short_topic = (
-                            lines[0] if lines else "Nie udało się wygenerować tematu"
-                        )
-                        short_summary = (
-                            " ".join(lines[1:])
-                            if len(lines) > 1
-                            else "Nie udało się wygenerować podsumowania"
-                        )
-                        logger.info(
-                            "Zwracam: topic='%s...', summary='%s...'",
-                            short_topic[:50],
-                            short_summary[:50],
-                        )
-                        return short_topic, short_summary
+                        partial_summaries.append(content)
                     else:
-                        raise OpenAIAPIError(
-                            "Brak odpowiedzi z modelu OpenAI (krótki tekst)"
-                        )
+                        raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI")
                 except (openai.OpenAIError, OpenAIAPIError) as exc:
-                    msg = f"Błąd podsumowania krótkiego tekstu: {exc}\n"
+                    msg = f"Błąd fragmentu {text_idx+1}: {exc}\n"
                     logger.error(msg)
                     with open(log_path, "a", encoding="utf-8") as log_file:
                         log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-                    st.error(f"Błąd podczas podsumowywania tekstu: {exc}")
-                    return "Błąd podczas podsumowywania tekstu", str(exc)
+                    return "Błąd podczas podsumowywania fragmentu", str(exc)
+            if not partial_summaries:
+                return (
+                    "Nie udało się wygenerować podsumowania",
+                    "Brak podsumowań fragmentów.",
+                )
+            try:
+                final_prompt = (
+                    "Oto podsumowania fragmentów długiego tekstu. Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n"
+                    + "\n".join(partial_summaries)
+                )
+                completion = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": final_prompt}],
+                    max_tokens=300,
+                )
+                if completion and completion.choices and completion.choices[0].message:
+                    content = completion.choices[0].message.content
+                    lines = content.splitlines() if content else []
+                    final_topic = lines[0] if lines else "Nie udało się wygenerować tematu"
+                    final_summary = " ".join(lines[1:]) if len(lines) > 1 else "Nie udało się wygenerować podsumowania"
+                    return final_topic, final_summary
+                else:
+                    raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (final)")
+            except (openai.OpenAIError, OpenAIAPIError) as exc:
+                msg = f"Błąd końcowego podsumowania: {exc}\n"
+                logger.error(msg)
+                with open(log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                return "Błąd podczas generowania końcowego podsumowania", str(exc)
+        else:
+            try:
+                prompt = "Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami:\n" + input_text
+                completion = openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=300,
+                )
+                if completion and completion.choices and completion.choices[0].message:
+                    content = completion.choices[0].message.content
+                    lines = content.splitlines() if content else []
+                    short_topic = lines[0] if lines else "Nie udało się wygenerować tematu"
+                    short_summary = " ".join(lines[1:]) if len(lines) > 1 else "Nie udało się wygenerować podsumowania"
+                    return short_topic, short_summary
+                else:
+                    raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (krótki tekst)")
+            except (openai.OpenAIError, OpenAIAPIError) as exc:
+                msg = f"Błąd podsumowania krótkiego tekstu: {exc}\n"
+                logger.error(msg)
+                with open(log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                return "Błąd podczas podsumowywania tekstu", str(exc)
     except (openai.OpenAIError, OpenAIAPIError) as exc:
-        # Obsługa błędu braku środków/quota w OpenAI
         if (
             "insufficient_quota" in str(exc).lower()
             or "you exceeded your current quota" in str(exc).lower()
             or "error code: 429" in str(exc).lower()
         ):
-            st.error(
-                "Brak środków lub limitu na koncie OpenAI. Sprawdź swój plan i limity na https://platform.openai.com/account/billing."
-            )
-            logger.error("Błąd quota (429/insufficient_quota): %s", exc)
             return "Brak środków na koncie OpenAI", str(exc)
         msg = f"Błąd ogólny podsumowania: {exc}\n"
         logger.error(msg)
         with open(log_path, "a", encoding="utf-8") as log_file:
             log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
-        st.error(f"Błąd ogólny podczas podsumowywania: {exc}")
         return "Błąd ogólny podczas podsumowywania", str(exc)
-
     return (
         "Nie udało się wygenerować podsumowania",
         "Spróbuj ponownie lub skontaktuj się z administratorem",
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# INTERFEJS UŻYTKOWNIKA - GŁÓWNA APLIKACJA STREAMLIT
-# ═══════════════════════════════════════════════════════════════════════════════
+# --- Panel boczny: Informacje o systemie i audio na dole ---
+sidebar_bottom = """
+<style>
+#custom-sidebar-bottom { position: fixed; bottom: 0; left: 0; width: 22rem; z-index: 9999; }
+@media (max-width: 900px) { #custom-sidebar-bottom { width: 100vw; } }
+</style>
+<div id='custom-sidebar-bottom'></div>
+<script>
+const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+const bottom = window.parent.document.getElementById('custom-sidebar-bottom');
+if(sidebar && bottom) sidebar.appendChild(bottom);
+</script>
+"""
+components.html(sidebar_bottom, height=0)
 
-# --- Sekcja 1: Panel boczny - Wybór źródła audio ---
-# Użytkownik może wybrać między plikiem lokalnym a linkiem YouTube
-src = st.sidebar.radio("Wybierz źródło audio:", ["Plik lokalny", "YouTube"])
-
-# --- Sekcja 2: Inicjalizacja zmiennych i stanu sesji ---
-# Zmienne do przechowywania danych pliku i obsługi błędów
-data, ext = None, None
-error_message = None
-
-# --- Sekcja 3: Zarządzanie stanem sesji dla YouTube ---
-# Flagi zapobiegające dublowaniu pobierania i umożliwiające czyszczenie starych danych
-if "yt_success" not in st.session_state:
-    st.session_state["yt_success"] = False
-if "yt_data" not in st.session_state:
-    st.session_state["yt_data"] = None
-if "yt_ext" not in st.session_state:
-    st.session_state["yt_ext"] = None
-
-if src == "YouTube":
-    url = st.sidebar.text_input("Wklej adres www z YouTube:")
-    # --- RESET STANU PO ZMIANIE URL ---
-    prev_url = st.session_state.get("yt_prev_url", None)
-    if url and url != prev_url:
-        # Usuwanie starych kluczy sesji i plików powiązanych z poprzednim UID
-        keys_to_remove = []
-        for k in list(st.session_state.keys()):
-            if isinstance(k, str) and (
-                k.startswith("done_")
-                or k.startswith("topic_")
-                or k.startswith("summary_")
-                or k.startswith("yt_")
-            ):
-                keys_to_remove.append(k)
-        for k in keys_to_remove:
-            del st.session_state[
-                k
-            ]  # Usuń pliki powiązane z poprzednim UID (jeśli istnieje)
-        prev_uid = st.session_state.get("yt_prev_uid", None)
-        if prev_uid:
-            for folder in (
-                BASE_DIR / "originals",
-                BASE_DIR / "transcripts",
-                BASE_DIR / "summaries",
-            ):
-                for ext_suffix in (
-                    ".mp3",
-                    ".wav",
-                    ".m4a",
-                    ".mp4",
-                    ".mov",
-                    ".avi",
-                    ".webm",
-                    ".txt",
-                ):
-                    file_to_remove = folder / f"{prev_uid}{ext_suffix}"
-                    if file_to_remove.exists():
-                        try:
-                            file_to_remove.unlink()
-                        except OSError as cleanup_exc:
-                            logger.warning(
-                                "Nie udało się usunąć pliku %s: %s",
-                                file_to_remove,
-                                cleanup_exc,
-                            )
-        # Resetuj flagi yt
-        st.session_state["yt_success"] = False
-        st.session_state["yt_data"] = None
-        st.session_state["yt_ext"] = None
-        st.session_state["yt_prev_uid"] = None
-        st.session_state["yt_prev_url"] = url
-    
-    # --- Sekcja 4A: Pobieranie audio z YouTube ---
-    # Sprawdzenie czy audio już zostało pobrane (cache w session_state)
-    if (
-        st.session_state.get("yt_success")
-        and st.session_state.get("yt_data")
-        and st.session_state.get("yt_ext")
-    ):
-        data = st.session_state["yt_data"]
-        ext = st.session_state["yt_ext"]
-        st.success("Pomyślnie pobrano audio z YouTube!")
-    elif url:
-        # Pobieranie nowego pliku z YouTube z obsługą błędów
-        try:
-            with st.spinner("Pobieranie audio z YouTube..."):
-                data, ext = download_youtube_audio(url)
-                if not data or not isinstance(data, bytes):
-                    raise RuntimeError(
-                        "Nie udało się pobrać pliku audio z YouTube lub plik jest uszkodzony."
-                    )
-                st.session_state["yt_success"] = True
-                st.session_state["yt_data"] = data
-                st.session_state["yt_ext"] = ext
-                uid, _, _, _ = init_paths(data, ext)
-                st.session_state["yt_prev_uid"] = uid
-                st.session_state["yt_prev_url"] = url
-                st.success("Pomyślnie pobrano audio z YouTube!")
-        except ValueError as e:
-            st.warning(f"⚠️ {str(e)}")
-            st.session_state["yt_success"] = False
-            st.session_state["yt_data"] = None
-            st.session_state["yt_ext"] = None
-            st.stop()
-        except RuntimeError as e:
-            st.error(f"❌ {str(e)}")
-            st.session_state["yt_success"] = False
-            st.session_state["yt_data"] = None
-            st.session_state["yt_ext"] = None
-            st.stop()
-        except (OSError, KeyError, TypeError) as e:
-            st.error(f"❌ Wystąpił nieoczekiwany błąd: {str(e)}")
-            logger.error("Nieoczekiwany błąd podczas pobierania z YouTube: %s", str(e))
-            st.session_state["yt_success"] = False
-            st.session_state["yt_data"] = None
-            st.session_state["yt_ext"] = None
-            st.stop()
-        
-        # Cache'owanie danych po pobraniu
-        data = st.session_state["yt_data"]
-        ext = st.session_state["yt_ext"]
-    else:
-        # Brak URL - wyczyść stan i zatrzymaj
-        st.session_state["yt_success"] = False
-        st.session_state["yt_data"] = None
-        st.session_state["yt_ext"] = None
-        st.stop()
-
-# --- Sekcja 4B: Obsługa plików lokalnych ---
-else:
-    # Upload pliku przez użytkownika z ograniczeniem typów
-    up = st.sidebar.file_uploader(
-        "Wybierz plik", type=[e.strip(".") for e in ALLOWED_EXT]
-    )
-    if up:
-        data, ext = up.read(), Path(secure_filename(up.name)).suffix.lower()
-    else:
-        st.stop()
-
-# --- Sekcja 5: Walidacja danych ---
-# Sprawdzenie czy mamy dane do przetworzenia
-if data is None or ext is None:
-    st.stop()
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PRZETWARZANIE PLIKU - PRZYGOTOWANIE DO TRANSKRYPCJI
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# --- Sekcja 6: Inicjalizacja ścieżek i metadanych ---
-# Tworzenie UID na podstawie zawartości pliku i przygotowanie ścieżek
-uid, orig, tr, sm = init_paths(data, ext)
-
-# Diagnostyka: informacje o pliku
-file_size = orig.stat().st_size if orig.exists() else 0
-st.info(
-    f"Plik do transkrypcji: {orig} | Rozmiar: {file_size/1024:.1f} KB | Format: {ext}"
-)
-logger.info(
-    "Plik do transkrypcji: %s | Rozmiar: %d bajtów | Format: %s", orig, file_size, ext
-)
-
-# --- Sekcja 7: Przygotowanie pliku do transkrypcji ---
-# Whisper/OpenAI obsługuje bezpośrednio: mp3, wav, m4a, webm, mp4
-# Konwersja do WAV tylko w przypadku problemów ze split_audio
-split_input = orig
-
-# --- Sekcja 8: Odtwarzacz audio i opcje pobierania ---
-st.audio(orig.read_bytes(), format=ext.lstrip("."))
-
-# Przycisk pobierania audio (umieszczony bezpośrednio pod odtwarzaczem)
-if ext in [".mp3", ".wav", ".m4a"]:
-    st.download_button("Pobierz audio", orig.read_bytes(), file_name=f"{uid}{ext}")
-else:
-    # Konwersja do MP3 na żądanie dla plików video (MP4, WEBM, MOV, AVI)
-    mp3_path = orig.with_suffix(".mp3")
-    if not mp3_path.exists():
-        deps_info = check_dependencies()
-        if not deps_info["ffmpeg"]["available"]:
-            st.warning("FFmpeg nie jest dostępny – nie można przekonwertować do MP3.")
-        else:
-            ffmpeg_path = deps_info["ffmpeg"]["path"]
-            ffmpeg_command = [ffmpeg_path, "-y", "-i", str(orig), str(mp3_path)]
-            try:
-                subprocess.run(
-                    ffmpeg_command,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    check=True,
-                )
-            except subprocess.CalledProcessError as conversion_exc:
-                st.warning(f"Błąd konwersji do MP3: {conversion_exc}")
-    if mp3_path.exists():
-        st.download_button(
-            "Pobierz audio (MP3)", mp3_path.read_bytes(), file_name=f"{uid}.mp3"
-        )
-    else:
-        st.download_button(
-            "Pobierz audio (oryginał)", orig.read_bytes(), file_name=f"{uid}{ext}"
-        )
-
-# --- Sekcja 9: Zarządzanie stanu sesji ---
-# Tworzenie unikalnych kluczy sesji dla danego pliku (UID)
-# Pozwala na obsługę wielu plików w jednej sesji Streamlit bez konfliktów
-done_key = f"done_{uid}"        # Czy transkrypcja została wykonana
-topic_key = f"topic_{uid}"      # Temat podsumowania
-sum_key = f"summary_{uid}"      # Treść podsumowania
-
-# Inicjalizacja kluczy sesji z wartościami domyślnymi
-for key, default in [(done_key, False), (topic_key, ""), (sum_key, "")]:
-    if key not in st.session_state:
-        st.session_state[key] = default
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PROCES TRANSKRYPCJI - PRZETWARZANIE AUDIO NA TEKST
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# --- Sekcja 10: Sprawdzenie stanu transkrypcji ---
-# Sprawdzamy czy transkrypcja już istnieje w pliku
-transcript_exists = tr.exists() and tr.stat().st_size > 0
-
-# --- Sekcja 11: Proces transkrypcji ---
-# Główny proces transkrypcji uruchamiany przyciskiem
-if st.button("Transkrybuj") and not st.session_state[done_key]:
-    try:
-        # Krok 1: Podział pliku na fragmenty
-        chunks = split_audio(split_input)
-        st.info(f"Liczba fragmentów audio: {len(chunks)}")
-        logger.info("Liczba fragmentów audio po split_audio: %d", len(chunks))
-        
-        # Krok 2: Diagnostyka fragmentów
-        empty_audio_chunks_diag = []
-        for diag_idx, diag_chunk in enumerate(chunks):
-            size = diag_chunk.stat().st_size if diag_chunk.exists() else 0
-            st.write(
-                f"Fragment {diag_idx+1}: {diag_chunk} | Rozmiar: {size/1024:.1f} KB"
-            )
-            if size == 0:
-                empty_audio_chunks_diag.append(diag_chunk)
-        
-        # Krok 3: Walidacja fragmentów
-        if not chunks:
-            st.error(
-                "Nie udało się podzielić pliku na fragmenty. Sprawdź format pliku lub spróbuj ponownie."
-            )
-            st.stop()
-        
-        if empty_audio_chunks_diag:
-            st.warning(
-                f"UWAGA: {len(empty_audio_chunks_diag)} fragment(ów) ma rozmiar 0 bajtów i nie zostanie przetworzonych. Sprawdź źródłowy plik audio lub format."
-            )
-            logger.warning(
-                "Fragmenty o rozmiarze 0 bajtów: %s",
-                [str(c) for c in empty_audio_chunks_diag],
-            )
-        
-        # Krok 4: Transkrypcja fragmentów
-        transcription_text = transcribe_chunks(chunks, client)
-        
-        # Krok 5: Walidacja wyników transkrypcji
-        if not transcription_text.strip():
-            st.error(
-                "Transkrypcja nie powiodła się lub plik jest pusty/nieobsługiwany. Sprawdź format pliku lub spróbuj ponownie."
-            )
-            logger.error(
-                "Transkrypcja nie powiodła się – brak tekstu po transkrypcji. Liczba fragmentów: %d, puste fragmenty: %d",
-                len(chunks),
-                len(empty_audio_chunks_diag),
-            )
-            st.stop()
-        
-        # Krok 6: Zapis transkrypcji do pliku
-        encoding = get_safe_encoding()
-        tr.write_text(transcription_text, encoding=encoding)
-        
-        # Krok 7: Aktualizacja stanu sesji
-        st.session_state[done_key] = True
-        st.session_state[topic_key] = ""
-        st.session_state[sum_key] = ""
-        
-    except (OSError, ValueError) as e:
-        # Globalna obsługa błędów transkrypcji
-        logger.error("Błąd podczas transkrypcji: %s", e)
-        st.error(f"❌ Błąd podczas transkrypcji: {e}")
-        st.stop()
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# INTERFEJS PO TRANSKRYPCJI - WYŚWIETLANIE I PODSUMOWANIE
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# --- Sekcja 12: Wyświetlanie transkrypcji ---
-# Panel wyświetlania transkrypcji po zakończonym procesie lub wczytaniu istniejącego pliku
-if st.session_state[done_key] or transcript_exists:
-    encoding = get_safe_encoding()
-    transcript = tr.read_text(encoding=encoding) if tr.exists() else ""
-    
-    st.subheader("Transkrypt:")
-    st.text_area("Transkrypcja", transcript, height=300)
-    
-    # Przycisk pobierania transkrypcji
-    st.download_button(
-        "Pobierz transkrypt", transcript, file_name=f"{uid}_transkrypt.txt"
-    )
-    
-    # --- Sekcja 13: Proces podsumowania ---
-    # Generowanie tematu i podsumowania z transkrypcji
-    if st.button("Podsumuj"):
-        result_topic, result_summary = summarize(transcript, client)
-        st.session_state[topic_key] = result_topic
-        st.session_state[sum_key] = result_summary
-    
-    # --- Sekcja 14: Wyświetlanie podsumowania ---
-    # Panel wyświetlania wygenerowanego tematu i podsumowania
-    if st.session_state[topic_key] or st.session_state[sum_key]:
-        st.subheader("Temat:")
-        st.write(st.session_state[topic_key])
-        
-        st.subheader("Podsumowanie:")
-        st.write(st.session_state[sum_key])
-        
-        # Przycisk pobierania podsumowania
-        st.download_button(
-            "Pobierz podsumowanie",
-            st.session_state[sum_key],
-            file_name=f"{uid}_podsumowanie.txt",
-        )
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PANEL INFORMACJI O SYSTEMIE - DIAGNOSTYKA I DEBUGGING
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# --- Sekcja 15: Panel informacji o systemie ---
-# Rozwijany panel z informacjami technicznymi o środowisku
-with st.sidebar.expander("ℹ️ Informacje o systemie"):
+with st.sidebar.expander("ℹ️ Informacje o systemie", expanded=False):
     sys_info = get_system_info()
     deps_info = check_dependencies()
-    
     st.write("**Platforma:**", sys_info["platform"].title())
     st.write("**Architektura:**", sys_info["architecture"])
     st.write("**Python:**", sys_info["python_version"])
-    
     st.write("**Zależności:**")
     for tool, info in deps_info.items():
         status = "✅ Dostępne" if info["available"] else "❌ Niedostępne"
         st.write(f"- {tool.upper()}: {status}")
         if info["available"] and info["path"]:
             st.write(f"  📁 Ścieżka: `{info['path']}`")
-    
     st.write("**Kodowanie:**", get_safe_encoding())
     st.write("**Obsługiwane formaty:**", ", ".join(ALLOWED_EXT))
     st.write("**Maksymalny rozmiar:**", f"{MAX_SIZE/1024/1024:.1f} MB")
     st.write("**Długość fragmentu:**", f"{CHUNK_MS/1000/60:.0f} minut")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# KONIEC APLIKACJI
-# ═══════════════════════════════════════════════════════════════════════════════
+with st.sidebar.expander("🎵 Informacje o audio", expanded=False):
+    if 'audio_info_msgs' in st.session_state:
+        for msg in st.session_state['audio_info_msgs']:
+            st.write(msg)
+    else:
+        st.write("Brak informacji o pliku audio.")
+
+# --- Zbieranie komunikatów audio do sidebaru zamiast st.info ---
+# Przed każdą operacją na pliku audio, zamiast st.info(...), dodaj do st.session_state['audio_info_msgs']
+# Przykład:
+# st.session_state.setdefault('audio_info_msgs', []).append("Plik do transkrypcji: ...")
+# Przykład dla fragmentów:
+# st.session_state['audio_info_msgs'].append(f"Fragment {audio_idx+1}/{len(audio_chunks)}: {audio_chunk_file} | Rozmiar: {chunk_size/1024:.1f} KB")
+
+# --- Komunikat o błędnym YouTube URL pod polem w sidebarze ---
+# W miejscu obsługi YouTube:
+# url = st.sidebar.text_input("Wklej adres www z YouTube:")
+# youtube_url_error_placeholder = st.sidebar.empty()
+# ...
+# except ValueError as e:
+#     youtube_url_error_placeholder.warning(f"⚠️ {str(e)}")
