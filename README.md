@@ -231,7 +231,7 @@ Aplikacja będzie dostępna pod adresem: `http://localhost:8501`
 *Bezpośrednia transkrypcja filmów z YouTube przez wklejenie linku*
 
 ### Informacje o systemie
-<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.11.58.png" alt="Informacje systemowe" width="600"/>
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.11.58.png" alt="Informacje systemowe" height="350"/>
 
 *Panel diagnostyczny z informacjami o kompatybilności systemu*
 
