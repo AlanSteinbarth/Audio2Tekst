@@ -201,31 +201,38 @@ Aplikacja będzie dostępna pod adresem: `http://localhost:8501`
 ## 📸 Zrzuty ekranu
 
 ### Główny interfejs aplikacji
-![Interfejs główny](Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.07.51.png)
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.07.51.png" alt="Interfejs główny" width="600"/>
+
 *Przejrzysty interfejs z panelem bocznym do wprowadzania klucza API i wyboru źródła audio*
 
 ### Panel wyboru pliku lokalnego
-![Wybór pliku lokalnego](Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.08.23.png)
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.08.23.png" alt="Wybór pliku lokalnego" width="600"/>
+
 *Intuicyjny system wyboru plików z obsługą drag & drop*
 
 ### Podgląd audio i transkrypcja
-![Podgląd i transkrypcja](Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.08.58.png)
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.08.58.png" alt="Podgląd i transkrypcja" width="600"/>
+
 *Wbudowany odtwarzacz audio z przyciskiem transkrypcji*
 
 ### Wynik transkrypcji
-![Wynik transkrypcji](Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.09.50.png)
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.09.50.png" alt="Wynik transkrypcji" width="600"/>
+
 *Edytowalny tekst transkrypcji z opcją pobierania*
 
 ### Generowanie podsumowania AI
-![Podsumowanie AI](Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.10.33.png)
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.10.33.png" alt="Podsumowanie AI" width="600"/>
+
 *Inteligentne podsumowanie z tematem i kluczowymi punktami*
 
 ### Obsługa YouTube
-![YouTube support](Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.11.47.png)
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.11.47.png" alt="YouTube support" width="600"/>
+
 *Bezpośrednia transkrypcja filmów z YouTube przez wklejenie linku*
 
 ### Informacje o systemie
-![Informacje systemowe](Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.11.58.png)
+<img src="Screenshots/Zrzut%20ekranu%202025-06-13%20o%2016.11.58.png" alt="Informacje systemowe" width="600"/>
+
 *Panel diagnostyczny z informacjami o kompatybilności systemu*
 
 ## ⚙️ Konfiguracja
