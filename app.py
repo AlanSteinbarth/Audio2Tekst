@@ -164,11 +164,19 @@ def verify_api_key(key_to_verify: str) -> bool:
         return False
 
 # --- Konfiguracja Streamlit ---
-# Ustawienia strony i ładowanie zmiennych środowiskowych
 st.set_page_config(page_title="Audio2Tekst", layout="wide")
-# .env jest ładowany zawsze na starcie, przed pobraniem klucza API
 load_dotenv()
 
+
+# --- Inicjalizacja domyślnych wartości stanu sesji ---
+if "api_key_verified" not in st.session_state:
+    st.session_state.api_key_verified = False
+if "api_key_error_message" not in st.session_state:
+    st.session_state.api_key_error_message = ""
+if "api_key_input_changed" not in st.session_state:
+    st.session_state.api_key_input_changed = False
+if "current_input_key" not in st.session_state:
+    st.session_state.current_input_key = ""
 
 # Sprawdzenie klucza z .env przy pierwszym uruchomieniu, jeśli nie został jeszcze zweryfikowany
 # Ta logika zostanie uruchomiona tylko raz na sesję, chyba że api_key_verified zostanie zresetowane
@@ -191,19 +199,6 @@ if "env_key_invalid" not in st.session_state:
 # Główny interfejs aplikacji
 if not st.session_state.api_key_verified:
     # --- Ekran początkowy przed weryfikacją klucza ---
-    st.markdown("""
-    <div style='display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh;'>
-        <h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0.5em;'>📼 Audio2Tekst 📝</h1>
-        <p style='text-align: center; font-size: 1.1rem; max-width: 600px; margin: 0 auto; color: #444;'>
-            Profesjonalny konwerter audio na tekst wykorzystujący OpenAI Whisper.<br>
-            Wspiera 90+ języków, batch processing, eksport do różnych formatów (TXT, DOCX, PDF).<br>
-            GUI z drag&drop, progress tracking i opcjami konfiguracji jakości transkrypcji.<br>
-            Idealny dla dziennikarzy, studentów i twórców treści.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.sidebar.title("Konfiguracja API")
     api_key_error_placeholder = st.sidebar.empty()
 
     if st.session_state.api_key_error_message:
@@ -725,6 +720,19 @@ def summarize(input_text: str, openai_client):
         "Spróbuj ponownie lub skontaktuj się z administratorem",
     )
 
+
+# --- Ekran powitalny i opis aplikacji na samej górze strony ---
+st.markdown("""
+<div style='display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 0;'>
+    <h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0.5em;'>📼 Audio2Tekst 📝</h1>
+    <p style='text-align: center; font-size: 1.1rem; max-width: 600px; margin: 0 auto; color: #444;'>
+        Profesjonalny konwerter audio na tekst wykorzystujący OpenAI Whisper.<br>
+        Wspiera 90+ języków, batch processing, eksport do różnych formatów (TXT, DOCX, PDF).<br>
+        GUI z drag&drop, progress tracking i opcjami konfiguracji jakości transkrypcji.<br>
+        Idealny dla dziennikarzy, studentów i twórców treści.
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # --- Panel boczny: Informacje o systemie i audio na dole ---
 sidebar_bottom = """
