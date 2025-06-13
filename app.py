@@ -748,7 +748,7 @@ def summarize(input_text: str, openai_client):
 # --- Ekran powitalny i opis aplikacji na samej górze strony ---
 st.markdown("""
 <div style='display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 0;'>
-    <h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0.5em;'>📼 Audio2Tekst 📝</h1>
+    <h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0.5em;'>🎧 Audio2Tekst 📝</h1>
     <p style='text-align: center; font-size: 1.1rem; max-width: 600px; margin: 0 auto; color: #444;'>
         Szybka transkrypcja plików audio i YouTube na tekst.<br>
         Prosto. Bez zbędnych opcji.

@@ -1,4 +1,4 @@
-# 📼 Audio2Tekst 📝
+# 🎧 Audio2Tekst 📝
 
 <div align="center">
   <img src="Screenshots/Okładka.png" alt="Audio2Tekst - Profesjonalne narzędzie do transkrypcji audio i video" width="800"/>
