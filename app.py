@@ -764,6 +764,7 @@ st.markdown("""
     </p>
 </div>
 """, unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
 # --- Panel boczny: Informacje o systemie i audio na samym dole sidebaru ---
 # (PRZENIESIONO TĘ SEKCJĘ ZA DEFINICJE STAŁYCH)
@@ -940,11 +941,12 @@ if file_data is not None and file_ext is not None:
                     with st.spinner("Transkrypcja w toku..."):
                         # Sprawdzenie długości pliku
                         duration = get_duration(orig_path)
-                        st.info(f"Długość pliku: {duration/60:.1f} minut")
-                        
+                        # Dodaj info do sidebaru zamiast st.info
+                        st.session_state.setdefault('audio_info_msgs', [])
+                        st.session_state['audio_info_msgs'].append(f"Długość pliku: {duration/60:.1f} minut")
                         # Podział na fragmenty jeśli plik jest długi
                         if duration > CHUNK_MS / 1000:
-                            st.info("Plik zostanie podzielony na fragmenty do przetworzenia...")
+                            st.session_state['audio_info_msgs'].append("Plik zostanie podzielony na fragmenty do przetworzenia...")
                             audio_chunks = split_audio(orig_path)
                             transcript_text = transcribe_chunks(audio_chunks, client)
                         else:
@@ -1018,7 +1020,9 @@ if file_data is not None and file_ext is not None:
                                 topic, summary = summarize(edited_transcript, client)
                                 
                                 if topic and summary:
-                                    summary_content = f"**Temat:** {topic}\n\n**Podsumowanie:** {summary}"
+                                    # Usuń powielone 'Temat:' jeśli model zwraca taki nagłówek
+                                    topic_clean = topic.replace('Temat:', '').strip()
+                                    summary_content = f"**Temat:** {topic_clean}\n\n**Podsumowanie:** {summary}"
                                     summary_path.write_text(summary_content, encoding=get_safe_encoding())
                                     
                                     st.success("Podsumowanie zostało wygenerowane!")
