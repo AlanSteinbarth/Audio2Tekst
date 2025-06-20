@@ -20,6 +20,8 @@
 [![API Coverage](https://img.shields.io/badge/API-OpenAI%20Whisper-orange.svg)]()
 [![Formats](https://img.shields.io/badge/Formats-7%20Supported-purple.svg)]()
 
+**🌐 [WYPRÓBUJ DEMO NA ŻYWO](https://audio2tekst-demo.streamlit.app)** | **📖 [Przypadki użycia](USE_CASES.md)** | **🏗️ [Architektura](ARCHITECTURE.md)**
+
 </div>
 
 > **Profesjonalne narzędzie do transkrypcji audio i video na tekst z automatycznym podsumowaniem**  
@@ -45,6 +47,25 @@ Aplikacja webowa stworzona przy użyciu Streamlit, która umożliwia transkrypcj
 - 🌍 **Cross-Platform** - pełna kompatybilność z Windows, macOS i Linux
 - 🔍 **Automatyczne wykrywanie systemu** - inteligentne dostosowanie do platformy
 - ⚡ **Sprawdzanie zależności** - automatyczna weryfikacja FFmpeg/FFprobe
+
+## 🛠️ Stack technologiczny
+
+### Backend & AI
+- **Python 3.8+** - główny język programowania  
+- **OpenAI Whisper API** - state-of-the-art speech recognition
+- **OpenAI GPT-3.5** - inteligentne podsumowania AI
+- **Streamlit** - nowoczesny framework webowy
+
+### Przetwarzanie mediów
+- **FFmpeg** - profesjonalna konwersja audio/video
+- **yt-dlp** - niezawodne pobieranie z YouTube  
+- **Audio processing** - chunking, format conversion, normalization
+
+### DevOps & Production
+- **Docker** - konteneryzacja aplikacji
+- **GitHub Actions** - automatyczne CI/CD
+- **Cross-platform** - Windows/macOS/Linux support
+- **Security scanning** - Bandit, Safety, Semgrep
 
 ## 📊 Metryki wydajności i wpływ projektu
 
@@ -502,3 +523,26 @@ Ten projekt jest licencjonowany na licencji MIT - zobacz plik [LICENSE](LICENSE.
 Made with ❤️ by [Alan Steinbarth](https://github.com/AlanSteinbarth)
 
 </div>
+
+## 🧩 Rozwiązane wyzwania techniczne
+
+### 🔧 Obsługa dużych plików audio (>25MB)
+**Problem**: OpenAI Whisper API ma limit rozmiaru pojedynczego pliku  
+**Rozwiązanie**: Implementacja intelligent chunking
+- Automatyczny podział na 5-minutowe segmenty z overlappingiem
+- Zachowanie kontekstu między fragmentami  
+- Optymalne wykorzystanie API rate limits
+
+### 🌍 Cross-platform compatibility
+**Problem**: Różne ścieżki FFmpeg, kodowanie plików na Windows/macOS/Linux  
+**Rozwiązanie**: Abstrakcja warstwy systemowej
+- Automatyczne wykrywanie OS i ścieżek do narzędzi
+- Uniwersalne kodowanie UTF-8/UTF-8-sig
+- Graceful fallback gdy brakuje zależności
+
+### 🤖 OpenAI API token limits  
+**Problem**: Długie transkrypcje >8000 znaków przekraczają context window  
+**Rozwiązanie**: Hierarchiczne podsumowywanie
+- Smart text splitting z zachowaniem zdań
+- Fragmenty→podsumowania częściowe→finalne podsumowanie
+- Comprehensive error handling i retry logic
