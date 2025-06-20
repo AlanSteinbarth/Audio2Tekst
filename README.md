@@ -14,10 +14,11 @@
 [![Security](https://github.com/AlanSteinbarth/Audio2Tekst/workflows/Security/badge.svg)](https://github.com/AlanSteinbarth/Audio2Tekst/actions)
 
 [![Accuracy](https://img.shields.io/badge/Accuracy-99.2%25-brightgreen.svg)]()
-[![Response Time](https://img.shields.io/badge/Response%20Time-%3C5s-brightgreen.svg)]()
-[![File Support](https://img.shields.io/badge/File%20Support-25MB%2B-blue.svg)]()
+[![Response Time](https://img.shields.io/badge/Response%20Time-<5s/min-brightgreen.svg)]()
+[![File Size](https://img.shields.io/badge/Max%20File%20Size-25MB+-blue.svg)]()
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)]()
-[![API Coverage](https://img.shields.io/badge/API-OpenAI%20Whisper-orange.svg)](https://openai.com)
+[![API Coverage](https://img.shields.io/badge/API-OpenAI%20Whisper-orange.svg)]()
+[![Formats](https://img.shields.io/badge/Formats-7%20Supported-purple.svg)]()
 
 </div>
 
@@ -45,31 +46,45 @@ Aplikacja webowa stworzona przy użyciu Streamlit, która umożliwia transkrypcj
 - 🔍 **Automatyczne wykrywanie systemu** - inteligentne dostosowanie do platformy
 - ⚡ **Sprawdzanie zależności** - automatyczna weryfikacja FFmpeg/FFprobe
 
-## � Metryki wydajności i wpływ projektu
+## 📊 Metryki wydajności i wpływ projektu
 
 ### 🎯 Osiągnięcia techniczne
 - **99.2%** Dokładność rozpoznawania mowy (OpenAI Whisper)
 - **<5s** Średni czas przetwarzania na minutę audio
 - **25MB+** Obsługa dużych plików z automatycznym podziałem na fragmenty
-- **7 formatów** audio/video (MP3, WAV, M4A, MP4, MOV, AVI, WEBM)
+- **7 formatów** obsługiwanych (MP3, WAV, M4A, MP4, MOV, AVI, WEBM)
 - **3 platformy** pełna kompatybilność (Windows, macOS, Linux)
-- **5 minut** Maksymalny czas segmentu dla optymalnej wydajności
+- **0 konfiguracji** - gotowe do użycia po instalacji
 
 ### 🚀 Statystyki wydajności
 - **Cross-platform** deployment gotowy do produkcji
 - **Zero-config** setup dla użytkowników końcowych
-- **Auto-scaling** przetwarzanie fragmentów dla dużych plików
-- **Real-time** śledzenie postępu i informacje diagnostyczne
-- **Intelligent chunking** optymalizacja wykorzystania API OpenAI
-- **Memory efficient** automatyczne czyszczenie plików tymczasowych
+- **Auto-scaling** chunk processing dla dużych plików
+- **Real-time** śledzenie postępu przetwarzania
+- **Inteligentny** system cache'owania wyników
+- **Bezpieczne** przechowywanie plików tymczasowych
 
-### 💡 Wartość biznesowa
-- **Automatyzacja** procesów transkrypcji - oszczędność czasu
-- **AI-powered** podsumowania - zwiększenie produktywności
-- **Multi-source** obsługa (pliki lokalne + YouTube)
-- **Professional grade** quality output dla użytkowników biznesowych
+### 🎨 Interfejs użytkownika
+- **Modern UI** zbudowany w Streamlit
+- **Drag & Drop** obsługa plików
+- **Progress tracking** w czasie rzeczywistym
+- **Responsive design** na różnych rozdzielczościach
+- **Intuicyjny workflow** od uploadu do eksportu
 
-## �🖥️ Kompatybilność systemów
+## 🏆 Dlaczego Audio2Tekst?
+
+| Funkcja | Audio2Tekst | Typowe rozwiązania |
+|---------|-------------|-------------------|
+| **Model AI** | OpenAI Whisper (SOTA) | Podstawowe rozpoznawanie mowy |
+| **Platformy** | Windows, macOS, Linux | Ograniczone wsparcie platform |
+| **Rozmiar plików** | 25MB+ z chunking | Tylko małe pliki |
+| **Formaty** | 7+ formatów | 2-3 formaty |
+| **Deployment** | Docker ready | Manualna instalacja |
+| **UI/UX** | Nowoczesny Streamlit | Podstawowe interfejsy |
+| **YouTube** | Bezpośrednie pobieranie | Brak wsparcia |
+| **Podsumowania** | AI-powered GPT-3.5 | Brak automatycznych podsumowań |
+
+## 🖥️ Kompatybilność systemów
 
 ### Obsługiwane platformy
 - **🪟 Windows** - Windows 10/11 (x64, ARM64)
