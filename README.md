@@ -20,7 +20,7 @@
 [![API Coverage](https://img.shields.io/badge/API-OpenAI%20Whisper-orange.svg)]()
 [![Formats](https://img.shields.io/badge/Formats-7%20Supported-purple.svg)]()
 
-**🌐 [WYPRÓBUJ DEMO NA ŻYWO](https://audio2tekst-demo.streamlit.app)** | **📖 [Przypadki użycia](USE_CASES.md)** | **🏗️ [Architektura](ARCHITECTURE.md)**
+<!-- **🌐 [WYPRÓBUJ DEMO NA ŻYWO](https://audio2tekst-demo.streamlit.app)** | --> **📖 [Przypadki użycia](USE_CASES.md)** | **🏗️ [Architektura](ARCHITECTURE.md)**
 
 </div>
 
