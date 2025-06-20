@@ -18,6 +18,12 @@ cache/
 *.log
 *.log.*
 
+# Docker Volumes (keep structure, ignore content)
+docker-volumes/uploads/*
+docker-volumes/logs/*
+docker-volumes/db/*
+!docker-volumes/*/.gitkeep
+
 # Python
 *.pyc
 *.pyo

@@ -1,0 +1,120 @@
+# ==============================================================================
+# Audio2Tekst - Docker Compose Configuration
+# ==============================================================================
+#
+# Easy deployment and development setup for Audio2Tekst
+# 
+# Usage:
+#   Development: docker-compose up --build
+#   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Author: Alan Steinbarth (alan.steinbarth@gmail.com)
+# GitHub: https://github.com/AlanSteinbarth/Audio2Tekst
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # Main Audio2Tekst application service
+  audio2tekst:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: audio2tekst-app
+    
+    # Port mapping for Streamlit web interface
+    ports:
+      - "8501:8501"
+    
+    # Environment variables
+    environment:
+      # OpenAI API Key (required for transcription and summarization)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Application settings
+      - MAX_FILE_SIZE=25
+      - CHUNK_DURATION=5
+      - DEFAULT_LANGUAGE=pl
+      - LOG_LEVEL=INFO
+      
+      # Streamlit configuration
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+    
+    # Volume mounts for persistent data
+    volumes:
+      # Persistent storage for uploads, transcripts, and summaries
+      - audio2tekst_uploads:/app/uploads
+      # Persistent storage for logs
+      - audio2tekst_logs:/app/logs
+      # Persistent storage for database
+      - audio2tekst_db:/app/db
+      
+      # Optional: Mount local .env file for development
+      # - ./.env:/app/.env:ro
+    
+    # Restart policy for production stability
+    restart: unless-stopped
+    
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits for optimal performance
+    deploy:
+      resources:
+        limits:
+          # Adjust based on your server capacity
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    
+    # Network configuration
+    networks:
+      - audio2tekst-network
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volumes for persistent data storage
+volumes:
+  audio2tekst_uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-volumes/uploads
+  
+  audio2tekst_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-volumes/logs
+  
+  audio2tekst_db:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-volumes/db
+
+# Custom network for the application
+networks:
+  audio2tekst-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

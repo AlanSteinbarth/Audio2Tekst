@@ -1,0 +1,143 @@
+# ==============================================================================
+# Audio2Tekst - Docker Ignore Rules
+# ==============================================================================
+#
+# This file specifies which files and directories should be excluded
+# from the Docker build context to optimize build performance and security
+#
+# ==============================================================================
+
+# Git and version control
+.git/
+.gitignore
+.gitattributes
+*.git*
+
+# Documentation (not needed in production container)
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+INSTALL.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+LICENSE.txt
+
+# Development and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Python development files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+
+# Local environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Runtime data (will be created in container)
+uploads/originals/*
+uploads/transcripts/*
+uploads/summaries/*
+logs/*
+db/*
+
+# Keep directory structure but ignore contents
+!uploads/originals/.gitkeep
+!uploads/transcripts/.gitkeep
+!uploads/summaries/.gitkeep
+!logs/.gitkeep
+!db/.gitkeep
+
+# Docker files (avoid recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD and deployment
+.github/
+Makefile
+
+# Screenshots and media (not needed in production)
+Screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.avi
+*.mov
+*.webm
+*.mp3
+*.wav
+*.m4a
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# NPM (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store?
+ehthumbs.db
+Icon?
+
+# Package files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
