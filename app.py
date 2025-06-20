@@ -184,9 +184,6 @@ st.markdown("""
     <p style='font-size: 1.2rem; color: #666; margin-bottom: 0;'>
         Profesjonalne narzędzie do transkrypcji audio i video na tekst z automatycznym podsumowaniem
     </p>
-    <p style='font-size: 1rem; color: #888;'>
-        🌍 Uniwersalna kompatybilność z Windows, macOS i Linux
-    </p>
 </div>
 """, unsafe_allow_html=True)
 
