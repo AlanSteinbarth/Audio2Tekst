@@ -164,8 +164,25 @@ def verify_api_key(key_to_verify: str) -> bool:
         return False
 
 # --- Konfiguracja Streamlit ---
-st.set_page_config(page_title="Audio2Tekst", layout="wide")
+st.set_page_config(
+    page_title="Audio2Tekst", 
+    layout="wide",
+    initial_sidebar_state="expanded"  # Sidebar domyślnie rozwinięty
+)
 load_dotenv()
+
+# --- Nagłówek aplikacji (zawsze widoczny) ---
+st.markdown("""
+<div style='text-align: center; margin-bottom: 2rem;'>
+    <h1 style='color: #1f77b4; margin-bottom: 0.5rem;'>🎧 Audio2Tekst 📝</h1>
+    <p style='font-size: 1.2rem; color: #666; margin-bottom: 0;'>
+        Profesjonalne narzędzie do transkrypcji audio i video na tekst z automatycznym podsumowaniem
+    </p>
+    <p style='font-size: 1rem; color: #888;'>
+        🌍 Uniwersalna kompatybilność z Windows, macOS i Linux
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 
 # --- Inicjalizacja domyślnych wartości stanu sesji ---
@@ -734,21 +751,6 @@ def summarize(input_text: str, openai_client):
         "Spróbuj ponownie lub skontaktuj się z administratorem",
     )
 
-
-# --- Ekran powitalny i opis aplikacji na samej górze strony ---
-st.markdown("""
-<div style='display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 0;'>
-    <h1 style='text-align: center; font-size: 2.8rem; margin-bottom: 0.5em;'>🎧 Audio2Tekst 📝</h1>
-    <p style='text-align: center; font-size: 1.1rem; max-width: 600px; margin: 0 auto; color: #444;'>
-        Szybka transkrypcja plików audio i YouTube na tekst.<br>
-        Prosto. Bez zbędnych opcji.
-    </p>
-</div>
-""", unsafe_allow_html=True)
-st.markdown("<br>", unsafe_allow_html=True)
-
-# --- Panel boczny: Informacje o systemie i audio na samym dole sidebaru ---
-# (PRZENIESIONO TĘ SEKCJĘ ZA DEFINICJE STAŁYCH)
 
 # --- Stałe i konfiguracja ścieżek ---
 BASE_DIR = Path("uploads")
