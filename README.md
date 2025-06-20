@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Cross-Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green.svg)](https://github.com/AlanSteinbarth/Audio2Tekst)
 [![Code Quality](https://github.com/AlanSteinbarth/Audio2Tekst/workflows/Code%20Quality/badge.svg)](https://github.com/AlanSteinbarth/Audio2Tekst/actions)
-[![Security](https://github.com/AlanSteinbarth/Audio2Tekst/workflows/Security/badge.svg)](https://github.com/AlanSteinbarth/Audio2Tekst/actions)
+[![Security Scanning](https://github.com/AlanSteinbarth/Audio2Tekst/workflows/Security%20Scanning/badge.svg)](https://github.com/AlanSteinbarth/Audio2Tekst/actions)
 
 [![Accuracy](https://img.shields.io/badge/Accuracy-99.2%25-brightgreen.svg)]()
 [![Response Time](https://img.shields.io/badge/Response%20Time-<5s/min-brightgreen.svg)]()
