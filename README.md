@@ -67,6 +67,29 @@ Aplikacja webowa stworzona przy użyciu Streamlit, która umożliwia transkrypcj
 - **Cross-platform** - Windows/macOS/Linux support
 - **Security scanning** - Bandit, Safety, Semgrep
 
+## 🧩 Rozwiązane wyzwania techniczne
+
+### 🔧 Obsługa dużych plików audio (>25MB)
+**Problem**: OpenAI Whisper API ma limit rozmiaru pojedynczego pliku  
+**Rozwiązanie**: Implementacja intelligent chunking
+- Automatyczny podział na 5-minutowe segmenty z overlappingiem
+- Zachowanie kontekstu między fragmentami  
+- Optymalne wykorzystanie API rate limits
+
+### 🌍 Cross-platform compatibility
+**Problem**: Różne ścieżki FFmpeg, kodowanie plików na Windows/macOS/Linux  
+**Rozwiązanie**: Abstrakcja warstwy systemowej
+- Automatyczne wykrywanie OS i ścieżek do narzędzi
+- Uniwersalne kodowanie UTF-8/UTF-8-sig
+- Graceful fallback gdy brakuje zależności
+
+### 🤖 OpenAI API token limits  
+**Problem**: Długie transkrypcje >8000 znaków przekraczają context window  
+**Rozwiązanie**: Hierarchiczne podsumowywanie
+- Smart text splitting z zachowaniem zdań
+- Fragmenty→podsumowania częściowe→finalne podsumowanie
+- Comprehensive error handling i retry logic
+
 ## 📊 Metryki wydajności i wpływ projektu
 
 ### 🎯 Osiągnięcia techniczne
@@ -425,7 +448,30 @@ Audio2Tekst/
 - **Walidacja plików**: Sprawdzanie rozszerzeń i rozmiarów
 - **Rate limiting**: Respektowanie limitów OpenAI API
 
-## 🧪 Testowanie
+## � Rozwiązane wyzwania techniczne
+
+### 🔧 Obsługa dużych plików audio (>25MB)
+**Problem**: OpenAI Whisper API ma limit rozmiaru pojedynczego pliku  
+**Rozwiązanie**: Implementacja intelligent chunking
+- Automatyczny podział na 5-minutowe segmenty z overlappingiem
+- Zachowanie kontekstu między fragmentami  
+- Optymalne wykorzystanie API rate limits
+
+### 🌍 Cross-platform compatibility
+**Problem**: Różne ścieżki FFmpeg, kodowanie plików na Windows/macOS/Linux  
+**Rozwiązanie**: Abstrakcja warstwy systemowej
+- Automatyczne wykrywanie OS i ścieżek do narzędzi
+- Uniwersalne kodowanie UTF-8/UTF-8-sig
+- Graceful fallback gdy brakuje zależności
+
+### 🤖 OpenAI API token limits  
+**Problem**: Długie transkrypcje >8000 znaków przekraczają context window  
+**Rozwiązanie**: Hierarchiczne podsumowywanie
+- Smart text splitting z zachowaniem zdań
+- Fragmenty→podsumowania częściowe→finalne podsumowanie
+- Comprehensive error handling i retry logic
+
+## �🧪 Testowanie
 
 ```bash
 # Uruchomienie testów
@@ -523,26 +569,3 @@ Ten projekt jest licencjonowany na licencji MIT - zobacz plik [LICENSE](LICENSE.
 Made with ❤️ by [Alan Steinbarth](https://github.com/AlanSteinbarth)
 
 </div>
-
-## 🧩 Rozwiązane wyzwania techniczne
-
-### 🔧 Obsługa dużych plików audio (>25MB)
-**Problem**: OpenAI Whisper API ma limit rozmiaru pojedynczego pliku  
-**Rozwiązanie**: Implementacja intelligent chunking
-- Automatyczny podział na 5-minutowe segmenty z overlappingiem
-- Zachowanie kontekstu między fragmentami  
-- Optymalne wykorzystanie API rate limits
-
-### 🌍 Cross-platform compatibility
-**Problem**: Różne ścieżki FFmpeg, kodowanie plików na Windows/macOS/Linux  
-**Rozwiązanie**: Abstrakcja warstwy systemowej
-- Automatyczne wykrywanie OS i ścieżek do narzędzi
-- Uniwersalne kodowanie UTF-8/UTF-8-sig
-- Graceful fallback gdy brakuje zależności
-
-### 🤖 OpenAI API token limits  
-**Problem**: Długie transkrypcje >8000 znaków przekraczają context window  
-**Rozwiązanie**: Hierarchiczne podsumowywanie
-- Smart text splitting z zachowaniem zdań
-- Fragmenty→podsumowania częściowe→finalne podsumowanie
-- Comprehensive error handling i retry logic
