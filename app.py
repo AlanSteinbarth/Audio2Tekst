@@ -150,13 +150,19 @@ def verify_api_key(key_to_verify: str) -> bool:
         st.session_state.api_key_error_message = "" # Wyczyszczenie błędu po sukcesie
         return True
     except openai.AuthenticationError:
-        st.session_state.api_key_error_message = "Nieprawidłowy klucz OpenAI API. Sprawdź, czy klucz jest poprawny i aktywny."
+        st.session_state.api_key_error_message = (
+            "Nieprawidłowy klucz OpenAI API. Sprawdź, czy klucz jest poprawny i aktywny."
+        )
         return False
     except openai.RateLimitError:
-        st.session_state.api_key_error_message = "Przekroczono limit zapytań dla tego klucza API lub problem z subskrypcją."
+        st.session_state.api_key_error_message = (
+            "Przekroczono limit zapytań dla tego klucza API lub problem z subskrypcją."
+        )
         return False
     except openai.APIConnectionError:
-        st.session_state.api_key_error_message = "Błąd połączenia z serwerami OpenAI. Sprawdź swoje połączenie internetowe."
+        st.session_state.api_key_error_message = (
+            "Błąd połączenia z serwerami OpenAI. Sprawdź swoje połączenie internetowe."
+        )
         return False
     except (openai.OpenAIError, OSError, RuntimeError, ValueError) as exc:
         logger.error("Nieoczekiwany błąd podczas weryfikacji klucza API: %s", exc)
@@ -217,7 +223,10 @@ if "env_key_invalid" not in st.session_state:
 if not st.session_state.api_key_verified:
     st.sidebar.markdown("""
     <h2 style='margin-bottom:0.5em;'>🔑 Klucz OpenAI API</h2>
-    <p style='font-size:0.95rem; color:#555;'>Aby korzystać z aplikacji, podaj swój klucz OpenAI API.<br>Nie jest on nigdzie zapisywany.</p>
+    <p style='font-size:0.95rem; color:#555;'>
+        Aby korzystać z aplikacji, podaj swój klucz OpenAI API.<br>
+        Nie jest on nigdzie zapisywany.
+    </p>
     """, unsafe_allow_html=True)
 
     user_api_key_input = st.sidebar.text_input(
@@ -302,7 +311,7 @@ except (OSError, RuntimeError, ValueError) as e:
     st.error(f"Błąd systemowy podczas inicjalizacji klienta OpenAI: {e}")
     st.session_state.api_key_verified = False
     client = None
-except Exception as e:  # nosec: broad-except uzasadniony – ochrona UI
+except (AttributeError, TypeError, ImportError) as e:  # Bardziej specyficzne wyjątki
     logger.error("Nieoczekiwany błąd podczas inicjalizacji klienta OpenAI: %s", traceback.format_exc())
     st.error(f"Nieoczekiwany błąd podczas inicjalizacji klienta OpenAI: {e}")
     st.session_state.api_key_verified = False
@@ -449,7 +458,7 @@ def download_youtube_audio(url: str):
                 yt_mp3_path = yt_file.with_suffix(".mp3")
                 ffmpeg_cmd = [ffmpeg_bin, "-y", "-i", str(yt_file), str(yt_mp3_path)]
                 try:
-                    subprocess.run(
+                    subprocess.run(  # nosec B603 # FFmpeg command with validated args
                         ffmpeg_cmd,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
@@ -473,7 +482,7 @@ def download_youtube_audio(url: str):
     except (OSError, FileNotFoundError, KeyError) as exc:
         st.error(f"Błąd systemowy podczas pobierania z YouTube: {str(exc)}")
         logger.error("Błąd pobierania z YouTube: %s", traceback.format_exc())
-    except Exception as exc:  # nosec: broad-except uzasadniony – ochrona UI
+    except (TypeError, AttributeError) as exc:  # Inne nieprzewidziane wyjątki
         st.error(f"Nieoczekiwany błąd: {str(exc)}")
         logger.error("Błąd pobierania z YouTube: %s", traceback.format_exc())
     finally:
@@ -553,10 +562,12 @@ def split_audio(file_path: Path):
         os.close(fd)
         tmp_path = Path(tmp)
         ffmpeg_cmd = [
-            ffmpeg_exe_path, "-y", "-i", str(file_path), "-ss", str(start), "-t", str(length), "-c", "copy", str(tmp_path)
+            ffmpeg_exe_path, "-y", "-i", str(file_path), 
+            "-ss", str(start), "-t", str(length), 
+            "-c", "copy", str(tmp_path)
         ]
         try:
-            subprocess.run(
+            subprocess.run(  # nosec B603 # FFmpeg command with validated args
                 ffmpeg_cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
@@ -588,7 +599,10 @@ def clean_transcript(transcript_text: str) -> str:
 
 def transcribe_chunks(audio_chunks, openai_client):
     texts = []
-    long_transcription_msg = "Plik audio poddawany transkrypcji jest bardzo duży. Potrzebuję więcej czasu. Cierpliwości..."
+    long_transcription_msg = (
+        "Plik audio poddawany transkrypcji jest bardzo duży. "
+        "Potrzebuję więcej czasu. Cierpliwości..."
+    )
     show_long_msg = [False]
     empty_audio_chunks = []
     failed_audio_chunks = []
@@ -663,7 +677,8 @@ def summarize(input_text: str, openai_client):
             for text_idx, text_chunk in enumerate(text_chunks):
                 try:
                     prompt = (
-                        f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami (fragment {text_idx+1}/{len(text_chunks)}):\n"
+                        f"Podaj temat w jednym zdaniu i podsumowanie 3-5 zdaniami "
+                        f"(fragment {text_idx+1}/{len(text_chunks)}):\n"
                         + text_chunk
                     )
                     completion = openai_client.chat.completions.create(
@@ -690,7 +705,8 @@ def summarize(input_text: str, openai_client):
                 )
             try:
                 final_prompt = (
-                    "Oto podsumowania fragmentów długiego tekstu. Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n"
+                    "Oto podsumowania fragmentów długiego tekstu. "
+                    "Na ich podstawie podaj jeden temat i jedno podsumowanie całości (3-5 zdań):\n"
                     + "\n".join(partial_summaries)
                 )
                 completion = openai_client.chat.completions.create(
@@ -741,10 +757,10 @@ def summarize(input_text: str, openai_client):
             or "error code: 429" in str(exc).lower()
         ):
             return "Brak środków na koncie OpenAI", str(exc)
-        msg = f"Błąd ogólny podsumowania: {exc}\n"
-        logger.error(msg)
+        error_msg = f"Błąd ogólny podsumowania: {exc}\n"
+        logger.error(error_msg)
         with open(log_path, "a", encoding="utf-8") as log_file:
-            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+            log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {error_msg}")
         return "Błąd ogólny podczas podsumowywania", str(exc)
     return (
         "Nie udało się wygenerować podsumowania",
@@ -813,7 +829,10 @@ with st.sidebar.expander("🎵 Informacje o audio", expanded=False):
 # Przykład:
 # st.session_state.setdefault('audio_info_msgs', []).append("Plik do transkrypcji: ...")
 # Przykład dla fragmentów:
-# st.session_state['audio_info_msgs'].append(f"Fragment {audio_idx+1}/{len(audio_chunks)}: {audio_chunk_file} | Rozmiar: {chunk_size/1024:.1f} KB")
+# st.session_state['audio_info_msgs'].append(
+#     f"Fragment {audio_idx+1}/{len(audio_chunks)}: {audio_chunk_file} | "
+#     f"Rozmiar: {chunk_size/1024:.1f} KB"
+# )
 
 # --- Komunikat o błędnym YouTube URL pod polem w sidebarze ---
 # W miejscu obsługi YouTube:
