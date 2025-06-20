@@ -19,8 +19,9 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)]()
 [![API Coverage](https://img.shields.io/badge/API-OpenAI%20Whisper-orange.svg)]()
 [![Formats](https://img.shields.io/badge/Formats-7%20Supported-purple.svg)]()
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit%20Cloud-FF4B4B.svg)](https://audio2tekst.streamlit.app/)
 
-<!-- **🌐 [WYPRÓBUJ DEMO NA ŻYWO](https://audio2tekst-demo.streamlit.app)** | --> **📖 [Przypadki użycia](USE_CASES.md)** | **🏗️ [Architektura](ARCHITECTURE.md)**
+**🌐 [WYPRÓBUJ DEMO NA ŻYWO](https://audio2tekst.streamlit.app/)** | **📖 [Przypadki użycia](USE_CASES.md)** | **🏗️ [Architektura](ARCHITECTURE.md)**
 
 </div>
 
@@ -156,6 +157,25 @@ Aplikacja automatycznie wykrywa system operacyjny i dostosowuje:
 
 ## 🛠️ Instalacja
 
+### 🌐 Opcja 1: Użyj Live Demo (Zalecane)
+
+**Najszybszy sposób** - po prostu odwiedź:
+🚀 **[https://audio2tekst.streamlit.app/](https://audio2tekst.streamlit.app/)**
+
+✅ **Korzyści:**
+- Brak instalacji - działa od razu w przeglądarce
+- Zawsze najnowsza wersja
+- Pełna funkcjonalność (transkrypcja, podsumowania, YouTube)
+- Hostowane na Streamlit Cloud z gwarancją dostępności
+
+⚠️ **Wymagania:**
+- Własny OpenAI API Key (wprowadź w panelu bocznym)
+- Stabilne połączenie internetowe
+
+### 🔧 Opcja 2: Instalacja lokalna
+
+Jeśli preferujesz uruchomienie lokalnie lub potrzebujesz modyfikacji kodu:
+
 ### 1. Klonowanie repozytorium
 ```bash
 git clone https://github.com/AlanSteinbarth/Audio2Tekst.git
@@ -253,6 +273,11 @@ cp .env.example .env
 ```
 
 ## 🚀 Uruchamianie
+
+### 🌐 Najszybsza opcja: Live Demo
+Odwiedź **[https://audio2tekst.streamlit.app/](https://audio2tekst.streamlit.app/)** - gotowe do użycia!
+
+### 💻 Uruchomienie lokalne
 
 ```bash
 streamlit run app.py
@@ -545,6 +570,7 @@ A: Sprawdź panel "Informacje o systemie" w aplikacji i zainstaluj FFmpeg zgodni
 - [Security Policy](SECURITY.md) dla problemów bezpieczeństwa
 
 ### Kontakt
+- **Live Demo**: [https://audio2tekst.streamlit.app/](https://audio2tekst.streamlit.app/)
 - **Autor**: Alan Steinbarth
 - **Email**: alan.steinbarth@gmail.com
 - **GitHub**: [@AlanSteinbarth](https://github.com/AlanSteinbarth)
