@@ -283,40 +283,47 @@ docker stats audio2tekst-app
 - ✅ **Resource limits** - kontrola zużycia CPU i pamięci
 - ✅ **Health checks** - monitoring stanu aplikacji
 
-## �📖 Instrukcja użytkowania
+## 🩺 Health checks & Monitoring
 
-### 1. Konfiguracja API Key
-- Otwórz aplikację w przeglądarce
-- W panelu bocznym wprowadź swój OpenAI API Key
-- Key jest wymagany do funkcji transkrypcji i podsumowania
+Aplikacja 🎧 Audio2Tekst 📝 posiada wbudowane mechanizmy health-check oraz wsparcie dla monitoringu kontenerów.
 
-### 2. Wybór źródła audio
-**Opcja A: Plik lokalny**
-- Wybierz "Plik lokalny" w panelu bocznym
-- Przeciągnij i upuść plik lub kliknij "Browse files"
-- Obsługiwane formaty: MP3, WAV, M4A, MP4, MOV, AVI, WEBM
+### Health check endpoint
 
-**Opcja B: YouTube**
-- Wybierz "YouTube" w panelu bocznym
-- Wklej link do filmu YouTube
-- Aplikacja automatycznie wyodrębni audio
+- **GET** `/health`  
+- **Opis:** Szybka weryfikacja, czy aplikacja działa poprawnie (do użycia przez load balancer, Docker, CI/CD).
 
-### 3. Transkrypcja
-- Po załadowaniu pliku kliknij "Transkrybuj"
-- Długie pliki są automatycznie dzielone na 5-minutowe segmenty
-- Postęp jest wyświetlany w czasie rzeczywistym
+**Przykład odpowiedzi:**
+```json
+{
+  "status": "ok",
+  "version": "2.3.0",
+  "timestamp": "2025-06-20T12:34:56Z"
+}
+```
 
-### 4. Edycja i eksport
-- Transkrypcja pojawi się w edytowalnym polu tekstowym
-- Możesz ręcznie poprawić tekst przed podsumowaniem
-- Kliknij "Pobierz transkrypt" aby zapisać plik .txt
-- **Pobieranie audio**: Dla plików video (MP4, WEBM, MOV, AVI) dostępne jest automatyczne pobieranie w formacie MP3
-- **Pobieranie audio**: Dla plików audio (MP3, WAV, M4A) dostępne jest pobieranie w oryginalnym formacie
+Endpoint zwraca status aplikacji, wersję i znacznik czasu. Może być rozszerzony o szczegóły (np. status API, zależności, miejsce na dysku).
 
-### 5. Podsumowanie
-- Kliknij "Podsumuj" aby wygenerować temat i podsumowanie
-- AI wygeneruje jednoznaczny temat i 3-5 zdaniowe podsumowanie
-- Kliknij "Pobierz podsumowanie" aby zapisać wyniki
+### Integracja z Docker/Compose
+
+W plikach `Dockerfile` i `docker-compose.yml` zdefiniowany jest healthcheck:
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8501/health"]
+  interval: 30s
+  timeout: 5s
+  retries: 3
+```
+
+Dzięki temu Docker automatycznie monitoruje stan aplikacji i restartuje ją w razie problemów.
+
+### Monitoring
+
+- **Logi aplikacji** dostępne przez `docker-compose logs -f`
+- **Zużycie zasobów**: `docker stats audio2tekst-app`
+- **Status kontenera**: `docker inspect --format='{{.State.Health.Status}}' audio2tekst-app`
+
+Możliwa integracja z Prometheus/Grafana, ELK, Datadog itp. (opis w [DOCKER.md](DOCKER.md)).
 
 ## 📸 Zrzuty ekranu
 

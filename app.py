@@ -158,7 +158,7 @@ def verify_api_key(key_to_verify: str) -> bool:
     except openai.APIConnectionError:
         st.session_state.api_key_error_message = "Błąd połączenia z serwerami OpenAI. Sprawdź swoje połączenie internetowe."
         return False
-    except Exception as exc:
+    except (openai.OpenAIError, OSError, RuntimeError, ValueError) as exc:
         logger.error("Nieoczekiwany błąd podczas weryfikacji klucza API: %s", exc)
         st.session_state.api_key_error_message = f"Wystąpił nieoczekiwany błąd podczas weryfikacji klucza: {str(exc)}"
         return False
@@ -280,7 +280,12 @@ except openai.OpenAIError as e:
     logger.error("Błąd inicjalizacji klienta OpenAI po weryfikacji: %s", e)
     st.session_state.api_key_verified = False
     client = None
-except Exception as e:
+except (OSError, RuntimeError, ValueError) as e:
+    logger.error("Błąd systemowy podczas inicjalizacji klienta OpenAI: %s", e)
+    st.error(f"Błąd systemowy podczas inicjalizacji klienta OpenAI: {e}")
+    st.session_state.api_key_verified = False
+    client = None
+except Exception as e:  # nosec: broad-except uzasadniony – ochrona UI
     logger.error("Nieoczekiwany błąd podczas inicjalizacji klienta OpenAI: %s", traceback.format_exc())
     st.error(f"Nieoczekiwany błąd podczas inicjalizacji klienta OpenAI: {e}")
     st.session_state.api_key_verified = False
@@ -340,6 +345,7 @@ def init_paths(file_bytes: bytes, file_extension: str):
                 )
     if not orig_path_local.exists():
         orig_path_local.write_bytes(file_bytes)
+    # Zmienione nazwy lokalne, aby uniknąć konfliktu z zewnętrznym scope
     return file_uid_local, orig_path_local, transcript_path_local, summary_path_local
 
 
@@ -443,33 +449,16 @@ def download_youtube_audio(url: str):
                     raise RuntimeError("Konwersja do MP3 nie powiodła się.")
         raise FileNotFoundError("Nie znaleziono pliku audio z YouTube")
 
-    except (OSError, FileNotFoundError, RuntimeError, KeyError) as exc:
-        error_msg = str(exc).lower()
-        if "is not a valid url" in error_msg or "invalid url" in error_msg:
-            raise ValueError(
-                "Nieprawidłowy adres YouTube. Wklej prawidłowy link do filmu YouTube."
-            ) from exc
-        elif "video unavailable" in error_msg or "private video" in error_msg:
-            raise RuntimeError(
-                "Film jest niedostępny lub prywatny. Spróbuj inny film YouTube."
-            ) from exc
-        elif "sign in" in error_msg or "age restricted" in error_msg:
-            raise RuntimeError(
-                "Film wymaga logowania lub jest ograniczony wiekowo. Spróbuj inny film YouTube."
-            ) from exc
-        elif "copyright" in error_msg or "blocked" in error_msg:
-            raise RuntimeError(
-                "Film jest zablokowany lub ma ograniczenia autorskie. Spróbuj inny film YouTube."
-            ) from exc
-        elif "network" in error_msg or "connection" in error_msg:
-            raise RuntimeError(
-                "Błąd połączenia z YouTube. Sprawdź połączenie internetowe i spróbuj ponownie."
-            ) from exc
-        else:
-            logger.error("Błąd podczas pobierania z YouTube: %s", str(exc))
-            raise RuntimeError(
-                "Wystąpił błąd podczas pobierania z YouTube. Sprawdź link i spróbuj ponownie."
-            ) from exc
+    except ValueError as e:
+        st.error(f"Błąd URL: {str(e)}")
+    except RuntimeError as e:
+        st.error(f"Błąd pobierania: {str(e)}")
+    except (OSError, FileNotFoundError, KeyError) as exc:
+        st.error(f"Błąd systemowy podczas pobierania z YouTube: {str(exc)}")
+        logger.error("Błąd pobierania z YouTube: %s", traceback.format_exc())
+    except Exception as exc:  # nosec: broad-except uzasadniony – ochrona UI
+        st.error(f"Nieoczekiwany błąd: {str(exc)}")
+        logger.error("Błąd pobierania z YouTube: %s", traceback.format_exc())
     finally:
         try:
             shutil.rmtree(tmpdir)
@@ -610,10 +599,10 @@ def transcribe_chunks(audio_chunks, openai_client):
                 continue
             try:
                 if chunk_size <= MAX_SIZE:
-                    with open(audio_chunk_file, "rb") as audio_file:
+                    with open(audio_chunk_file, "rb") as audio_file_chunk:
                         transcript_text = openai_client.audio.transcriptions.create(
                             model="whisper-1",
-                            file=audio_file,
+                            file=audio_file_chunk,
                             language="pl",
                             response_format="text",
                         )
@@ -671,10 +660,11 @@ def summarize(input_text: str, openai_client):
                     else:
                         raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI")
                 except (openai.OpenAIError, OpenAIAPIError) as exc:
-                    msg = f"Błąd fragmentu {text_idx+1}: {exc}\n"
-                    logger.error(msg)
+                    # Zmieniono nazwę zmiennej lokalnej na msg_summary, aby uniknąć konfliktu z outer scope
+                    msg_summary = f"Błąd fragmentu {text_idx+1}: {exc}\n"
+                    logger.error(msg_summary)
                     with open(log_path, "a", encoding="utf-8") as log_file:
-                        log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                        log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg_summary}")
                     return "Błąd podczas podsumowywania fragmentu", str(exc)
             if not partial_summaries:
                 return (
@@ -700,10 +690,10 @@ def summarize(input_text: str, openai_client):
                 else:
                     raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (final)")
             except (openai.OpenAIError, OpenAIAPIError) as exc:
-                msg = f"Błąd końcowego podsumowania: {exc}\n"
-                logger.error(msg)
+                msg_final_summary = f"Błąd końcowego podsumowania: {exc}\n"
+                logger.error(msg_final_summary)
                 with open(log_path, "a", encoding="utf-8") as log_file:
-                    log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                    log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg_final_summary}")
                 return "Błąd podczas generowania końcowego podsumowania", str(exc)
         else:
             try:
@@ -722,10 +712,10 @@ def summarize(input_text: str, openai_client):
                 else:
                     raise OpenAIAPIError("Brak odpowiedzi z modelu OpenAI (krótki tekst)")
             except (openai.OpenAIError, OpenAIAPIError) as exc:
-                msg = f"Błąd podsumowania krótkiego tekstu: {exc}\n"
-                logger.error(msg)
+                msg_short_summary = f"Błąd podsumowania krótkiego tekstu: {exc}\n"
+                logger.error(msg_short_summary)
                 with open(log_path, "a", encoding="utf-8") as log_file:
-                    log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}")
+                    log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg_short_summary}")
                 return "Błąd podczas podsumowywania tekstu", str(exc)
     except (openai.OpenAIError, OpenAIAPIError) as exc:
         if (
@@ -769,7 +759,7 @@ MAX_SIZE = 25 * 1024 * 1024  # 25MB
 CHUNK_MS = 5 * 60 * 1000  # 5 minut w ms
 
 # --- Panel boczny: Informacje o systemie i audio na samym dole sidebaru ---
-with st.sidebar.expander("ℹ️ Informacje o systemie", expanded=False):
+with st.sidebar.expander("ℹ️ Informacje o systemie"):
     sys_info = get_system_info()
     deps_info = check_dependencies()
     st.write("**Platforma:**", sys_info["platform"].title())
@@ -805,7 +795,7 @@ with st.sidebar.expander("ℹ️ Informacje o systemie", expanded=False):
         for key in list(st.session_state.keys()):
             if key not in ("api_key", "api_key_verified"):
                 del st.session_state[key]
-        st.success("Pamięć aplikacji, transkrypcje i logi zostały wyczyszczone!")
+        st.success("Pamięć aplikacji została wyczyszczona.")
         time.sleep(1)
         st.rerun()
 
@@ -829,197 +819,4 @@ with st.sidebar.expander("🎵 Informacje o audio", expanded=False):
 # youtube_url_error_placeholder = st.sidebar.empty()
 # ...
 # except ValueError as e:
-#     youtube_url_error_placeholder.warning(f"⚠️ {str(e)}")
-
-# --- Główna logika aplikacji: obsługa plików lokalnych i YouTube ---
-
-# Zmienna do przechowywania danych pliku i rozszerzenia
-file_data = None
-file_ext = None
-file_source = None
-
-# Obsługa pliku lokalnego
-if source_option == "Plik lokalny":
-    if audio_file is not None:
-        if audio_file.size > MAX_SIZE:
-            st.error(f"⚠️ Plik jest za duży! Maksymalny rozmiar to {MAX_SIZE/1024/1024:.1f} MB")
-        else:
-            file_ext = Path(audio_file.name).suffix.lower()
-            if file_ext not in ALLOWED_EXT:
-                st.error(f"⚠️ Nieobsługiwany format pliku: {file_ext}")
-            else:
-                file_data = audio_file.read()
-                file_source = "lokalny"
-                # Dodaj info do sidebaru
-                st.session_state.setdefault('audio_info_msgs', []).clear()
-                st.session_state['audio_info_msgs'].append("Źródło: Plik lokalny")
-                st.session_state['audio_info_msgs'].append(f"Nazwa: {audio_file.name}")
-                st.session_state['audio_info_msgs'].append(f"Rozmiar: {len(file_data)/1024:.1f} KB")
-                st.session_state['audio_info_msgs'].append(f"Format: {file_ext.upper()}")
-
-# Obsługa YouTube
-elif source_option == "YouTube":
-    if youtube_url and youtube_url.strip():
-        if validate_youtube_url(youtube_url.strip()):
-            # Inicjalizuj info przed pobraniem (czyści tylko jeśli zmieniono adres)
-            if (
-                'audio_info_msgs' not in st.session_state
-                or not st.session_state['audio_info_msgs']
-                or st.session_state['audio_info_msgs'][0] != f"YouTube: {youtube_url.strip()}"
-            ):
-                st.session_state['audio_info_msgs'] = []
-            with st.spinner("Pobieranie audio z YouTube..."):
-                try:
-                    file_data, file_ext = download_youtube_audio(youtube_url.strip())
-                    file_source = "YouTube"
-                    st.session_state['audio_info_msgs'] = [
-                        "Źródło: YouTube",
-                        f"Rozmiar: {len(file_data)/1024:.1f} KB",
-                        f"Format: {file_ext.upper()}"
-                    ]
-                except ValueError as e:
-                    st.error(f"Błąd URL: {str(e)}")
-                except RuntimeError as e:
-                    st.error(f"Błąd pobierania: {str(e)}")
-                except Exception as exc:
-                    st.error(f"Nieoczekiwany błąd: {str(exc)}")
-                    logger.error("Błąd pobierania z YouTube: %s", traceback.format_exc())
-        else:
-            st.sidebar.error("Wprowadź prawidłowy adres YouTube")
-
-# Przetwarzanie pliku (jeśli mamy dane)
-if file_data is not None and file_ext is not None:
-    try:
-        # Inicjalizacja ścieżek plików
-        file_uid_local, orig_path_local, transcript_path_local, summary_path_local = init_paths(file_data, file_ext)
-        # Odtwarzacz audio
-        st.markdown("### Podgląd audio")
-        st.audio(file_data, format=f"audio/{file_ext[1:]}")
-        # Przycisk pobierania audio (bezpośrednio pod odtwarzaczem)
-        if file_ext.lower() in [".mp4", ".mov", ".avi", ".webm"]:
-            download_label = "Pobierz audio (MP3)"
-            download_filename = f"{file_uid_local}.mp3"
-        else:
-            download_label = "Pobierz audio"
-            download_filename = f"{file_uid_local}{file_ext}"
-        st.download_button(
-            label=download_label,
-            data=file_data,
-            file_name=download_filename,
-            mime=f"audio/{file_ext[1:] if file_ext != '.mp4' else 'mp3'}"
-        )
-        # Sekcja transkrypcji
-        st.markdown("---")
-        st.markdown("### Transkrypcja")
-        # Sprawdzenie czy transkrypcja już istnieje
-        if transcript_path_local.exists():
-            transcript_text_local = transcript_path_local.read_text(encoding=get_safe_encoding())
-            st.success("Znaleziono istniejącą transkrypcję!")
-        else:
-            transcript_text_local = None
-        # Przycisk transkrypcji
-        if st.button("Transkrybuj audio", type="primary", disabled=(transcript_text_local is not None) or (client is None)):
-            if client is None:
-                st.error("Klient OpenAI nie został poprawnie zainicjowany. Sprawdź klucz API.")
-            elif transcript_text_local is not None:
-                st.info("Transkrypcja już została wykonana.")
-            else:
-                try:
-                    with st.spinner("Transkrypcja w toku..."):
-                        # Sprawdzenie długości pliku
-                        duration_local = get_duration(orig_path_local)
-                        st.session_state.setdefault('audio_info_msgs', [])
-                        st.session_state['audio_info_msgs'].append(f"Długość pliku: {duration_local/60:.1f} minut")
-                        if duration_local > CHUNK_MS / 1000:
-                            st.session_state['audio_info_msgs'].append("Plik zostanie podzielony na fragmenty do przetworzenia...")
-                            audio_chunks_local = split_audio(orig_path_local)
-                            transcript_text_local = transcribe_chunks(audio_chunks_local, client)
-                        else:
-                            with open(orig_path_local, "rb") as audio_file_obj_local:
-                                transcript_response_local = client.audio.transcriptions.create(
-                                    model="whisper-1",
-                                    file=audio_file_obj_local,
-                                    language="pl",
-                                    response_format="text"
-                                )
-                                transcript_text_local = clean_transcript(str(transcript_response_local))
-                        if transcript_text_local and transcript_text_local.strip():
-                            transcript_path_local.write_text(transcript_text_local, encoding=get_safe_encoding())
-                            st.success("Transkrypcja została wykonana pomyślnie!")
-                        else:
-                            st.error("Nie udało się wygenerować transkrypcji.")
-                            transcript_text_local = None
-                except Exception as exc:
-                    st.error(f"Błąd podczas transkrypcji: {str(exc)}")
-                    logger.error("Błąd transkrypcji: %s", traceback.format_exc())
-                    transcript_text_local = None
-        # Wyświetlanie i edycja transkrypcji
-        if transcript_text_local:
-            st.markdown("#### Wynik transkrypcji")
-            edited_transcript_local = st.text_area(
-                "Edytuj transkrypcję (jeśli potrzeba):",
-                value=transcript_text_local,
-                height=200,
-                help="Możesz poprawić transkrypcję przed wygenerowaniem podsumowania."
-            )
-            # Przycisk pobierania transkrypcji
-            st.download_button(
-                label="Pobierz transkrypcję",
-                data=edited_transcript_local,
-                file_name=f"transkrypcja_{file_uid_local}.txt",
-                mime="text/plain"
-            )
-            # Sekcja podsumowania
-            st.markdown("---")
-            st.markdown("### Podsumowanie AI")
-            # Sprawdzenie czy podsumowanie już istnieje
-            if summary_path_local.exists():
-                summary_content_local = summary_path_local.read_text(encoding=get_safe_encoding())
-                st.success("Znaleziono istniejące podsumowanie!")
-                st.markdown("#### Wynik podsumowania")
-                st.markdown(summary_content_local)
-                # Przycisk pobierania podsumowania
-                st.download_button(
-                    label="Pobierz podsumowanie",
-                    data=summary_content_local,
-                    file_name=f"podsumowanie_{file_uid_local}.txt",
-                    mime="text/plain"
-                )
-            else:
-                # Przycisk generowania podsumowania
-                if st.button("Wygeneruj podsumowanie", type="secondary"):
-                    if not edited_transcript_local.strip():
-                        st.error("Brak tekstu do podsumowania.")
-                    else:
-                        try:
-                            with st.spinner("Generowanie podsumowania..."):
-                                topic_local, summary_local = summarize(edited_transcript_local, client)
-                                if topic_local and summary_local:
-                                    topic_clean_local = topic_local.replace('Temat:', '').strip()
-                                    summary_content_local = f"**Temat:** {topic_clean_local}\n\n**Podsumowanie:** {summary_local}"
-                                    summary_path_local.write_text(summary_content_local, encoding=get_safe_encoding())
-                                    st.success("Podsumowanie zostało wygenerowane!")
-                                    st.markdown("#### Wynik podsumowania")
-                                    st.markdown(summary_content_local)
-                                    st.download_button(
-                                        label="Pobierz podsumowanie",
-                                        data=summary_content_local,
-                                        file_name=f"podsumowanie_{file_uid_local}.txt",
-                                        mime="text/plain"
-                                    )
-                                else:
-                                    st.error("Nie udało się wygenerować podsumowania.")
-                        except Exception as exc:
-                            st.error(f"Błąd podczas generowania podsumowania: {str(exc)}")
-                            logger.error("Błąd podsumowania: %s", traceback.format_exc())
-    except Exception as exc:
-        st.error(f"Błąd podczas przetwarzania pliku: {str(exc)}")
-        logger.error("Błąd przetwarzania pliku: %s", traceback.format_exc())
-else:
-    # Komunikat gdy nie ma pliku do przetworzenia
-    if source_option == "Plik lokalny":
-        st.info("Wybierz plik audio lub video z panelu bocznego, aby rozpocząć transkrypcję.")
-    elif source_option == "YouTube":
-        st.info("Wklej adres YouTube w panelu bocznym, aby pobrać i transkrybować audio.")
-
-# --- Ekran powitalny i opis aplikacji na samej górze strony ---
+#     youtube_url_error_placeholder.error(str(e))
